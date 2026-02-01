@@ -26,11 +26,10 @@ jobs:
     name: Integration Test (Gemini API)
     runs-on: ubuntu-latest
 
-    # ========== ใช้ GitHub Environment ==========
-    # ต้องสร้าง Environment ชื่อ "gemini-api" ใน GitHub repo settings
-    # แล้วเพิ่ม secrets:
+    # ========== ใช้ Repo Secrets ==========
+    # ไปที่ GitHub repo > Settings > Secrets and variables > Actions
+    # กด "New repository secret" แล้วเพิ่ม:
     #   - GEMINI_API_KEY: API key จาก https://aistudio.google.com/apikey
-    environment: gemini-api
 
     defaults:
       run:
