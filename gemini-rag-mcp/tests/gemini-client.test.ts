@@ -1,6 +1,6 @@
 /**
  * Tests for gemini-client.ts
- * Uses mocked fetch to test all API operations without real API calls
+ * Uses mocked fetch to test all File Search API operations without real API calls
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -35,7 +35,6 @@ describe('GeminiClient', () => {
   describe('Constructor', () => {
     it('should use default base URL', () => {
       const c = new GeminiClient({ apiKey: 'key' });
-      // We verify via the fetch calls below
       expect(c).toBeDefined();
     });
 
@@ -45,223 +44,213 @@ describe('GeminiClient', () => {
     });
   });
 
-  // ========== Store (Corpus) Operations ==========
-  describe('Corpus Operations', () => {
-    it('createCorpus should POST to /corpora', async () => {
-      const mockCorpus = { name: 'corpora/test-123', displayName: 'Test Store' };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockCorpus));
+  // ========== Store Operations ==========
+  describe('Store Operations', () => {
+    it('createStore should POST to /fileSearchStores', async () => {
+      const mockStore = { name: 'fileSearchStores/test-123', displayName: 'Test Store' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockStore));
 
-      const result = await client.createCorpus('Test Store');
+      const result = await client.createStore('Test Store');
 
       expect(mockFetch).toHaveBeenCalledOnce();
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora');
+      expect(url).toContain('/v1beta/fileSearchStores');
       expect(url).toContain('key=test-api-key');
       expect(options.method).toBe('POST');
       expect(JSON.parse(options.body)).toEqual({ displayName: 'Test Store' });
-      expect(result).toEqual(mockCorpus);
+      expect(result).toEqual(mockStore);
     });
 
-    it('getCorpus should GET corpus by ID', async () => {
-      const mockCorpus = { name: 'corpora/test-123', displayName: 'Test Store' };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockCorpus));
+    it('getStore should GET store by ID', async () => {
+      const mockStore = { name: 'fileSearchStores/test-123', displayName: 'Test Store' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockStore));
 
-      const result = await client.getCorpus('test-123');
+      const result = await client.getStore('test-123');
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/test-123');
+      expect(url).toContain('/v1beta/fileSearchStores/test-123');
       expect(options.method).toBe('GET');
-      expect(result).toEqual(mockCorpus);
+      expect(result).toEqual(mockStore);
     });
 
-    it('getCorpus should handle full corpus name', async () => {
+    it('getStore should handle full store name', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({}));
 
-      await client.getCorpus('corpora/my-corpus');
+      await client.getStore('fileSearchStores/my-store');
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/my-corpus');
-      // Should not double-prefix
-      expect(url).not.toContain('corpora/corpora/');
+      expect(url).toContain('/v1beta/fileSearchStores/my-store');
+      expect(url).not.toContain('fileSearchStores/fileSearchStores/');
     });
 
-    it('listCorpora should GET with pagination params', async () => {
-      const mockList = { corpora: [{ name: 'corpora/a' }], nextPageToken: 'abc' };
+    it('listStores should GET with pagination params', async () => {
+      const mockList = { fileSearchStores: [{ name: 'fileSearchStores/a' }], nextPageToken: 'abc' };
       mockFetch.mockResolvedValueOnce(mockResponse(mockList));
 
-      const result = await client.listCorpora(50, 'token123');
+      const result = await client.listStores(10, 'token123');
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('pageSize=50');
+      expect(url).toContain('pageSize=10');
       expect(url).toContain('pageToken=token123');
       expect(result).toEqual(mockList);
     });
 
-    it('deleteCorpus should DELETE with force param', async () => {
+    it('deleteStore should DELETE with force param', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({}));
 
-      await client.deleteCorpus('test-123', true);
+      await client.deleteStore('test-123', true);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/test-123');
+      expect(url).toContain('/v1beta/fileSearchStores/test-123');
       expect(url).toContain('force=true');
       expect(options.method).toBe('DELETE');
+    });
+  });
+
+  // ========== Upload Operations ==========
+  describe('Upload Operations', () => {
+    it('uploadTextToStore should POST multipart to upload endpoint', async () => {
+      const mockOp = { name: 'operations/op-123', done: false };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockOp));
+
+      const result = await client.uploadTextToStore('test-store', 'Hello world', {
+        displayName: 'Test Doc',
+      });
+
+      expect(mockFetch).toHaveBeenCalledOnce();
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toContain('/upload/v1beta/fileSearchStores/test-store:upload');
+      expect(url).toContain('key=test-api-key');
+      expect(options.method).toBe('POST');
+      expect(options.headers['Content-Type']).toContain('multipart/related');
+      expect(options.body).toContain('Hello world');
+      expect(options.body).toContain('Test Doc');
+      expect(result).toEqual(mockOp);
+    });
+
+    it('uploadTextToStore should include custom metadata', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1' }));
+
+      await client.uploadTextToStore('s1', 'text', {
+        customMetadata: [{ key: 'genre', stringValue: 'fiction' }],
+      });
+
+      const body = mockFetch.mock.calls[0][1].body;
+      expect(body).toContain('genre');
+      expect(body).toContain('fiction');
+    });
+
+    it('uploadFileToFilesApi should POST multipart to files endpoint', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        file: { name: 'files/abc', displayName: 'test.txt' },
+      }));
+
+      const result = await client.uploadFileToFilesApi('content here', 'test.txt');
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toContain('/upload/v1beta/files');
+      expect(options.method).toBe('POST');
+      expect(options.body).toContain('content here');
+      expect(result.name).toBe('files/abc');
+    });
+
+    it('importFileToStore should POST to importFile endpoint', async () => {
+      const mockOp = { name: 'operations/op-456' };
+      mockFetch.mockResolvedValueOnce(mockResponse(mockOp));
+
+      const result = await client.importFileToStore('store-1', 'files/abc', [
+        { key: 'category', stringValue: 'manual' },
+      ]);
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toContain('/v1beta/fileSearchStores/store-1:importFile');
+      expect(options.method).toBe('POST');
+      const body = JSON.parse(options.body);
+      expect(body.fileName).toBe('files/abc');
+      expect(body.customMetadata).toHaveLength(1);
+      expect(result).toEqual(mockOp);
+    });
+  });
+
+  // ========== Poll Operation ==========
+  describe('Poll Operation', () => {
+    it('should poll until done', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: true, response: { name: 'doc/1' } }));
+
+      const result = await client.pollOperation('ops/1', 10000);
+
+      expect(result.done).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw on operation error', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        name: 'ops/1',
+        done: true,
+        error: { code: 3, message: 'Invalid file' },
+      }));
+
+      await expect(client.pollOperation('ops/1')).rejects.toThrow('Operation failed: Invalid file');
     });
   });
 
   // ========== Document Operations ==========
   describe('Document Operations', () => {
-    it('createDocument should POST with metadata', async () => {
-      const mockDoc = { name: 'corpora/c1/documents/d1', displayName: 'Doc' };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockDoc));
-
-      const result = await client.createDocument('c1', 'Doc', [
-        { key: 'category', stringValue: 'manual' },
-      ]);
-
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents');
-      expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
-      expect(body.displayName).toBe('Doc');
-      expect(body.customMetadata).toHaveLength(1);
-      expect(result).toEqual(mockDoc);
-    });
-
-    it('getDocument should GET by corpus and document ID', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({}));
-
-      await client.getDocument('c1', 'd1');
-
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1');
-      expect(options.method).toBe('GET');
-    });
-
     it('listDocuments should GET with pagination', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ documents: [] }));
 
-      await client.listDocuments('c1', 20);
+      await client.listDocuments('s1', 10);
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents');
-      expect(url).toContain('pageSize=20');
+      expect(url).toContain('/v1beta/fileSearchStores/s1/documents');
+      expect(url).toContain('pageSize=10');
+    });
+
+    it('getDocument should GET by store and document ID', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'fileSearchStores/s1/documents/d1' }));
+
+      await client.getDocument('s1', 'd1');
+
+      const [url, options] = mockFetch.mock.calls[0];
+      expect(url).toContain('/v1beta/fileSearchStores/s1/documents/d1');
+      expect(options.method).toBe('GET');
+    });
+
+    it('getDocument should handle full document name', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({}));
+
+      await client.getDocument('s1', 'fileSearchStores/s1/documents/d1');
+
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('/v1beta/fileSearchStores/s1/documents/d1');
+      expect(url).not.toContain('documents/fileSearchStores');
     });
 
     it('deleteDocument should DELETE with force', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({}));
 
-      await client.deleteDocument('c1', 'd1', true);
+      await client.deleteDocument('fileSearchStores/s1/documents/d1', true);
 
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1');
+      expect(url).toContain('/v1beta/fileSearchStores/s1/documents/d1');
       expect(url).toContain('force=true');
       expect(options.method).toBe('DELETE');
     });
   });
 
-  // ========== Chunk Operations ==========
-  describe('Chunk Operations', () => {
-    it('createChunk should POST text to document chunks', async () => {
-      const mockChunk = { name: 'corpora/c1/documents/d1/chunks/ch1' };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockChunk));
-
-      await client.createChunk('c1', 'd1', 'Hello world');
-
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1/chunks');
-      expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
-      expect(body.data.stringValue).toBe('Hello world');
-    });
-
-    it('batchCreateChunks should POST multiple chunks', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({ chunks: [{}, {}] }));
-
-      await client.batchCreateChunks('c1', 'd1', [
-        { text: 'chunk 1' },
-        { text: 'chunk 2' },
-      ]);
-
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1/chunks:batchCreate');
-      expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
-      expect(body.requests).toHaveLength(2);
-    });
-
-    it('listChunks should GET with pagination', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({ chunks: [] }));
-
-      await client.listChunks('c1', 'd1', 50);
-
-      const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1/chunks');
-      expect(url).toContain('pageSize=50');
-    });
-
-    it('getChunk should GET by full path', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({}));
-
-      await client.getChunk('c1', 'd1', 'ch1');
-
-      const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1/chunks/ch1');
-    });
-
-    it('deleteChunk should DELETE', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({}));
-
-      await client.deleteChunk('c1', 'd1', 'ch1');
-
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1/documents/d1/chunks/ch1');
-      expect(options.method).toBe('DELETE');
-    });
-  });
-
-  // ========== Query (Search) ==========
-  describe('Query Operations', () => {
-    it('queryCorpus should POST search query', async () => {
-      const mockResult = { relevantChunks: [{ chunkRelevanceScore: 0.9 }] };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockResult));
-
-      const result = await client.queryCorpus('c1', 'how to install?', 5);
-
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/corpora/c1:query');
-      expect(options.method).toBe('POST');
-      const body = JSON.parse(options.body);
-      expect(body.query).toBe('how to install?');
-      expect(body.resultsCount).toBe(5);
-      expect(result).toEqual(mockResult);
-    });
-
-    it('queryCorpus should include metadata filters', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({ relevantChunks: [] }));
-
-      await client.queryCorpus('c1', 'test query', 10, [
-        { key: 'category', conditions: [{ stringValue: 'manual', operation: 'EQUAL' }] },
-      ]);
-
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.metadataFilters).toHaveLength(1);
-      expect(body.metadataFilters[0].key).toBe('category');
-    });
-  });
-
-  // ========== AI Agent (Generate Answer) ==========
-  describe('AI Agent Operations', () => {
-    it('generateAnswer should POST with semantic retriever config', async () => {
-      const mockResponse_ = {
+  // ========== Search Operations ==========
+  describe('Search Operations', () => {
+    it('searchStore should POST generateContent with file_search tool', async () => {
+      const mockResult = {
         candidates: [{
           content: { role: 'model', parts: [{ text: 'The answer is...' }] },
         }],
         usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 50, totalTokenCount: 60 },
       };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockResponse_));
+      mockFetch.mockResolvedValueOnce(mockResponse(mockResult));
 
-      const result = await client.generateAnswer('c1', 'What is RAG?', {
+      const result = await client.searchStore('s1', 'What is RAG?', {
         model: 'gemini-2.0-flash',
         temperature: 0.5,
         maxOutputTokens: 1024,
@@ -273,129 +262,99 @@ describe('GeminiClient', () => {
 
       const body = JSON.parse(options.body);
       expect(body.contents[0].parts[0].text).toBe('What is RAG?');
-      expect(body.semanticRetriever.source).toBe('corpora/c1');
+      expect(body.tools[0].fileSearch.fileSearchStoreNames).toContain('fileSearchStores/s1');
       expect(body.generationConfig.temperature).toBe(0.5);
       expect(body.generationConfig.maxOutputTokens).toBe(1024);
       expect(result.candidates).toHaveLength(1);
     });
 
-    it('generateAnswer should use default model when not specified', async () => {
+    it('searchStore should use default model when not specified', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ candidates: [] }));
 
-      await client.generateAnswer('c1', 'test');
+      await client.searchStore('s1', 'test');
 
       const [url] = mockFetch.mock.calls[0];
       expect(url).toContain('/v1beta/models/gemini-2.0-flash:generateContent');
     });
 
-    it('generateAnswer should include metadata filters and chunk config', async () => {
+    it('searchStore should include topK and metadataFilter', async () => {
       mockFetch.mockResolvedValueOnce(mockResponse({ candidates: [] }));
 
-      await client.generateAnswer('c1', 'test', {
-        maxChunksCount: 5,
-        minimumRelevanceScore: 0.8,
-        metadataFilters: [
-          { key: 'project', conditions: [{ stringValue: 'app', operation: 'EQUAL' }] },
-        ],
+      await client.searchStore('s1', 'test', {
+        topK: 5,
+        metadataFilter: 'genre = "fiction"',
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.semanticRetriever.maxChunksCount).toBe(5);
-      expect(body.semanticRetriever.minimumRelevanceScore).toBe(0.8);
-      expect(body.semanticRetriever.metadataFilters).toHaveLength(1);
+      expect(body.tools[0].fileSearch.topK).toBe(5);
+      expect(body.tools[0].fileSearch.metadataFilter).toBe('genre = "fiction"');
+    });
+
+    it('searchStore should not include generationConfig when no options', async () => {
+      mockFetch.mockResolvedValueOnce(mockResponse({ candidates: [] }));
+
+      await client.searchStore('s1', 'test');
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.generationConfig).toBeUndefined();
     });
   });
 
-  // ========== Upload Text ==========
-  describe('Upload Text to Corpus', () => {
-    it('should create document and batch create chunks', async () => {
-      // First call: createDocument
+  // ========== Convenience Methods ==========
+  describe('Convenience Methods', () => {
+    it('uploadTextAndWait should upload and poll', async () => {
+      // Upload
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
+      // Poll - done
       mockFetch.mockResolvedValueOnce(mockResponse({
-        name: 'corpora/c1/documents/new-doc',
-        displayName: 'Test Doc',
+        name: 'ops/1',
+        done: true,
+        response: { name: 'fileSearchStores/s1/documents/d1' },
       }));
-      // Second call: batchCreateChunks
-      mockFetch.mockResolvedValueOnce(mockResponse({ chunks: [{}] }));
 
-      const result = await client.uploadTextToCorpus('c1', 'Test Doc', 'Some short text.', {
-        chunkSize: 2000,
+      const result = await client.uploadTextAndWait('s1', 'text content', {
+        displayName: 'My Doc',
       });
 
-      expect(result.document.name).toBe('corpora/c1/documents/new-doc');
-      expect(result.chunksCreated).toBe(1);
+      expect(result.operation.done).toBe(true);
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('should handle empty text', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({
-        name: 'corpora/c1/documents/empty-doc',
-        displayName: 'Empty Doc',
-      }));
-
-      const result = await client.uploadTextToCorpus('c1', 'Empty Doc', '');
-
-      expect(result.chunksCreated).toBe(0);
-      // Only createDocument should be called
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('should split long text into multiple chunks', async () => {
-      // createDocument
-      mockFetch.mockResolvedValueOnce(mockResponse({
-        name: 'corpora/c1/documents/long-doc',
-        displayName: 'Long Doc',
-      }));
-      // batchCreateChunks
-      mockFetch.mockResolvedValueOnce(mockResponse({ chunks: [{}, {}, {}] }));
-
-      // Create text with ~150 chars per sentence, chunk size of 100
-      const longText = Array(10).fill('This is a long sentence for testing text splitting. ').join('');
-
-      const result = await client.uploadTextToCorpus('c1', 'Long Doc', longText, {
-        chunkSize: 100,
-        chunkOverlap: 20,
-      });
-
-      expect(result.chunksCreated).toBeGreaterThan(1);
-    });
-  });
-
-  // ========== Import from URL ==========
-  describe('Import from URL', () => {
-    it('should fetch URL and upload content', async () => {
-      // First: fetch URL
+    it('importFromUrl should fetch URL then upload then import', async () => {
+      // Fetch URL
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
-        text: async () => 'Content from URL. This is fetched text.',
+        text: async () => 'Content from URL.',
       });
-      // Second: createDocument
+      // Upload to Files API
       mockFetch.mockResolvedValueOnce(mockResponse({
-        name: 'corpora/c1/documents/url-doc',
-        displayName: 'URL Doc',
+        file: { name: 'files/abc', displayName: 'url-doc' },
       }));
-      // Third: batchCreateChunks
-      mockFetch.mockResolvedValueOnce(mockResponse({ chunks: [{}] }));
+      // Import to store
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
+      // Poll - done
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: true }));
 
-      const result = await client.importFromUrl('c1', 'https://example.com/doc.txt', 'URL Doc');
+      const result = await client.importFromUrl('s1', 'https://example.com/doc.txt', 'URL Doc');
 
-      expect(result.document.name).toBe('corpora/c1/documents/url-doc');
-      expect(result.chunksCreated).toBe(1);
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(result.file.name).toBe('files/abc');
+      expect(result.operation.done).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(4);
     });
 
-    it('should throw on failed URL fetch', async () => {
+    it('importFromUrl should throw on failed URL fetch', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
       });
 
       await expect(
-        client.importFromUrl('c1', 'https://example.com/404', 'Not Found')
+        client.importFromUrl('s1', 'https://example.com/404', 'Not Found')
       ).rejects.toThrow('Failed to fetch URL (404)');
     });
 
-    it('should throw on empty URL content', async () => {
+    it('importFromUrl should throw on empty URL content', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -403,7 +362,7 @@ describe('GeminiClient', () => {
       });
 
       await expect(
-        client.importFromUrl('c1', 'https://example.com/empty', 'Empty')
+        client.importFromUrl('s1', 'https://example.com/empty', 'Empty')
       ).rejects.toThrow('URL returned empty content');
     });
   });
@@ -414,10 +373,10 @@ describe('GeminiClient', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
-        text: async () => JSON.stringify({ error: { message: 'Invalid corpus name' } }),
+        text: async () => JSON.stringify({ error: { message: 'Invalid store name' } }),
       });
 
-      await expect(client.getCorpus('invalid')).rejects.toThrow('Gemini API Error (400): Invalid corpus name');
+      await expect(client.getStore('invalid')).rejects.toThrow('Gemini API Error (400): Invalid store name');
     });
 
     it('should throw on API error with raw text', async () => {
@@ -427,7 +386,7 @@ describe('GeminiClient', () => {
         text: async () => 'Internal Server Error',
       });
 
-      await expect(client.listCorpora()).rejects.toThrow('Gemini API Error (500): Internal Server Error');
+      await expect(client.listStores()).rejects.toThrow('Gemini API Error (500): Internal Server Error');
     });
 
     it('should handle 403 Forbidden', async () => {
@@ -437,7 +396,7 @@ describe('GeminiClient', () => {
         text: async () => JSON.stringify({ error: { message: 'API key not valid' } }),
       });
 
-      await expect(client.listCorpora()).rejects.toThrow('API key not valid');
+      await expect(client.listStores()).rejects.toThrow('API key not valid');
     });
   });
 });

@@ -1,10 +1,10 @@
 /**
  * Gemini RAG File Search MCP Server for Cloudflare Workers
- * Model Context Protocol server for Gemini Semantic Retrieval API
+ * Model Context Protocol server for Gemini File Search API
  */
 
 import { GeminiClient } from './gemini-client';
-import { MCPToolResponse, CustomMetadata } from './types';
+import { MCPToolResponse } from './types';
 import { Env, ApiResponse, AuthContext, RateLimitInfo } from './saas-types';
 import { TOOLS } from './tools';
 import {
@@ -96,36 +96,6 @@ function jsonRpcError(id: string | number | null, code: number, message: string)
 }
 
 // ============================================
-// Metadata Helper
-// ============================================
-
-function buildCustomMetadata(metadata?: {
-  category?: string;
-  project?: string;
-  tags?: string[];
-  priority?: number;
-}): CustomMetadata[] | undefined {
-  if (!metadata) return undefined;
-
-  const result: CustomMetadata[] = [];
-
-  if (metadata.category) {
-    result.push({ key: 'category', stringValue: metadata.category });
-  }
-  if (metadata.project) {
-    result.push({ key: 'project', stringValue: metadata.project });
-  }
-  if (metadata.tags && metadata.tags.length > 0) {
-    result.push({ key: 'tags', stringListValue: { values: metadata.tags } });
-  }
-  if (metadata.priority !== undefined) {
-    result.push({ key: 'priority', numericValue: metadata.priority });
-  }
-
-  return result.length > 0 ? result : undefined;
-}
-
-// ============================================
 // MCP Tool Handler
 // ============================================
 
@@ -138,147 +108,73 @@ async function handleToolCall(
 
   try {
     switch (toolName) {
-      // ========== Store (Corpus) Operations ==========
+      // ========== Store Operations ==========
       case 'gemini_create_store':
-        result = await client.createCorpus(args.display_name);
+        result = await client.createStore(args.display_name);
         break;
 
       case 'gemini_get_store':
-        result = await client.getCorpus(args.corpus_id);
+        result = await client.getStore(args.store_id);
         break;
 
       case 'gemini_list_stores':
-        result = await client.listCorpora(args.page_size || 100, args.page_token);
+        result = await client.listStores(args.page_size || 20, args.page_token);
         break;
 
       case 'gemini_delete_store':
-        await client.deleteCorpus(args.corpus_id, args.force || false);
-        result = { success: true, message: `Store ${args.corpus_id} deleted successfully` };
+        await client.deleteStore(args.store_id, args.force || false);
+        result = { success: true, message: `Store ${args.store_id} deleted successfully` };
+        break;
+
+      // ========== Upload / Import Operations ==========
+      case 'gemini_upload_text':
+        result = await client.uploadTextToStore(args.store_id, args.text_content, {
+          displayName: args.display_name,
+          customMetadata: args.metadata,
+        });
+        break;
+
+      case 'gemini_import_url':
+        result = await client.importFromUrl(args.store_id, args.url, args.display_name, {
+          customMetadata: args.metadata,
+        });
+        break;
+
+      case 'gemini_import_file':
+        result = await client.importFileToStore(args.store_id, args.file_name, args.metadata);
         break;
 
       // ========== Document Operations ==========
-      case 'gemini_create_document': {
-        const docMetadata = buildCustomMetadata(args.metadata);
-        result = await client.createDocument(args.corpus_id, args.display_name, docMetadata);
+      case 'gemini_list_documents':
+        result = await client.listDocuments(args.store_id, args.page_size || 20, args.page_token);
         break;
-      }
 
       case 'gemini_get_document':
-        result = await client.getDocument(args.corpus_id, args.document_id);
-        break;
-
-      case 'gemini_list_documents':
-        result = await client.listDocuments(args.corpus_id, args.page_size || 100, args.page_token);
+        result = await client.getDocument(args.store_id, args.document_id);
         break;
 
       case 'gemini_delete_document':
-        await client.deleteDocument(args.corpus_id, args.document_id, args.force || false);
-        result = { success: true, message: `Document ${args.document_id} deleted successfully` };
+        await client.deleteDocument(args.document_name, args.force || false);
+        result = { success: true, message: `Document ${args.document_name} deleted successfully` };
         break;
 
-      // ========== Content Upload Operations ==========
-      case 'gemini_upload_text': {
-        const uploadMetadata = buildCustomMetadata(args.metadata);
-        result = await client.uploadTextToCorpus(
-          args.corpus_id,
-          args.document_name,
-          args.text_content,
-          {
-            chunkSize: args.chunk_size,
-            chunkOverlap: args.chunk_overlap,
-            customMetadata: uploadMetadata,
-          }
-        );
-        break;
-      }
+      // ========== Search Operations ==========
+      case 'gemini_search_store': {
+        const searchResult = await client.searchStore(args.store_id, args.query, {
+          model: args.model,
+          temperature: args.temperature,
+          maxOutputTokens: args.max_output_tokens,
+          topK: args.top_k,
+          metadataFilter: args.metadata_filter,
+        });
 
-      case 'gemini_import_url': {
-        const importMetadata = buildCustomMetadata(args.metadata);
-        result = await client.importFromUrl(
-          args.corpus_id,
-          args.url,
-          args.document_name,
-          {
-            chunkSize: args.chunk_size,
-            chunkOverlap: args.chunk_overlap,
-            customMetadata: importMetadata,
-          }
-        );
-        break;
-      }
-
-      case 'gemini_create_chunks': {
-        if (args.chunks.length === 1) {
-          result = await client.createChunk(
-            args.corpus_id,
-            args.document_id,
-            args.chunks[0].text,
-            args.chunks[0].metadata ? buildCustomMetadata(args.chunks[0].metadata) : undefined
-          );
-        } else {
-          result = await client.batchCreateChunks(
-            args.corpus_id,
-            args.document_id,
-            args.chunks.map((c: any) => ({
-              text: c.text,
-              customMetadata: c.metadata ? buildCustomMetadata(c.metadata) : undefined,
-            }))
-          );
-        }
-        break;
-      }
-
-      // ========== Chunk Management Operations ==========
-      case 'gemini_list_chunks':
-        result = await client.listChunks(
-          args.corpus_id,
-          args.document_id,
-          args.page_size || 100,
-          args.page_token
-        );
-        break;
-
-      case 'gemini_get_chunk':
-        result = await client.getChunk(args.corpus_id, args.document_id, args.chunk_id);
-        break;
-
-      case 'gemini_delete_chunk':
-        await client.deleteChunk(args.corpus_id, args.document_id, args.chunk_id);
-        result = { success: true, message: `Chunk ${args.chunk_id} deleted successfully` };
-        break;
-
-      // ========== Search & AI Operations ==========
-      case 'gemini_search_store':
-        result = await client.queryCorpus(
-          args.corpus_id,
-          args.query,
-          args.results_count || 10,
-          args.metadata_filters
-        );
-        break;
-
-      case 'gemini_ai_agent': {
-        const agentResult = await client.generateAnswer(
-          args.corpus_id,
-          args.query,
-          {
-            model: args.model,
-            temperature: args.temperature,
-            maxOutputTokens: args.max_output_tokens,
-            maxChunksCount: args.max_chunks_count,
-            minimumRelevanceScore: args.minimum_relevance_score,
-            metadataFilters: args.metadata_filters,
-          }
-        );
-
-        // Format the response nicely
-        const answer = agentResult.candidates?.[0]?.content?.parts?.[0]?.text || 'No answer generated';
-        const grounding = agentResult.candidates?.[0]?.groundingMetadata;
+        const answer = searchResult.candidates?.[0]?.content?.parts?.[0]?.text || 'No answer generated';
+        const grounding = searchResult.candidates?.[0]?.groundingMetadata;
 
         result = {
           answer,
           model: args.model || 'gemini-2.0-flash',
-          usage: agentResult.usageMetadata,
+          usage: searchResult.usageMetadata,
           grounding: grounding
             ? {
                 chunks: grounding.groundingChunks,

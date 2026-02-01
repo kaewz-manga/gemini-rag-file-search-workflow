@@ -1,7 +1,7 @@
 /**
  * Tests for tools.ts
  * - Tool definitions structure validation
- * - All 16 tools present
+ * - All 11 tools present
  * - inputSchema validation
  */
 
@@ -9,8 +9,8 @@ import { describe, it, expect } from 'vitest';
 import { TOOLS } from '../src/tools';
 
 describe('MCP Tool Definitions', () => {
-  it('should have exactly 16 tools', () => {
-    expect(TOOLS).toHaveLength(16);
+  it('should have exactly 11 tools', () => {
+    expect(TOOLS).toHaveLength(11);
   });
 
   it('should have unique tool names', () => {
@@ -39,8 +39,8 @@ describe('MCP Tool Definitions', () => {
     }
   });
 
-  // ========== Store (Corpus) Operations ==========
-  describe('Store (Corpus) Operations', () => {
+  // ========== Store Operations ==========
+  describe('Store Operations', () => {
     it('should have gemini_create_store with display_name required', () => {
       const tool = TOOLS.find(t => t.name === 'gemini_create_store');
       expect(tool).toBeDefined();
@@ -48,11 +48,11 @@ describe('MCP Tool Definitions', () => {
       expect(tool!.inputSchema.required).toContain('display_name');
     });
 
-    it('should have gemini_get_store with corpus_id required', () => {
+    it('should have gemini_get_store with store_id required', () => {
       const tool = TOOLS.find(t => t.name === 'gemini_get_store');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.properties.corpus_id).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
+      expect(tool!.inputSchema.properties.store_id).toBeDefined();
+      expect(tool!.inputSchema.required).toContain('store_id');
     });
 
     it('should have gemini_list_stores with optional pagination', () => {
@@ -60,130 +60,80 @@ describe('MCP Tool Definitions', () => {
       expect(tool).toBeDefined();
       expect(tool!.inputSchema.properties.page_size).toBeDefined();
       expect(tool!.inputSchema.properties.page_token).toBeDefined();
-      // No required fields
       expect(tool!.inputSchema.required).toBeUndefined();
     });
 
-    it('should have gemini_delete_store with corpus_id required and optional force', () => {
+    it('should have gemini_delete_store with store_id required and optional force', () => {
       const tool = TOOLS.find(t => t.name === 'gemini_delete_store');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
+      expect(tool!.inputSchema.required).toContain('store_id');
       expect(tool!.inputSchema.properties.force).toBeDefined();
       expect(tool!.inputSchema.properties.force.type).toBe('boolean');
     });
   });
 
-  // ========== Document Operations ==========
-  describe('Document Operations', () => {
-    it('should have gemini_create_document with corpus_id and display_name required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_create_document');
+  // ========== Upload / Import Operations ==========
+  describe('Upload / Import Operations', () => {
+    it('should have gemini_upload_text with store_id and text_content required', () => {
+      const tool = TOOLS.find(t => t.name === 'gemini_upload_text');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('display_name');
+      expect(tool!.inputSchema.required).toContain('store_id');
+      expect(tool!.inputSchema.required).toContain('text_content');
+      expect(tool!.inputSchema.properties.display_name).toBeDefined();
       expect(tool!.inputSchema.properties.metadata).toBeDefined();
     });
 
-    it('should have gemini_get_document with corpus_id and document_id required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_get_document');
+    it('should have gemini_import_url with store_id, url, display_name required', () => {
+      const tool = TOOLS.find(t => t.name === 'gemini_import_url');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_id');
+      expect(tool!.inputSchema.required).toContain('store_id');
+      expect(tool!.inputSchema.required).toContain('url');
+      expect(tool!.inputSchema.required).toContain('display_name');
     });
 
-    it('should have gemini_list_documents with corpus_id required', () => {
+    it('should have gemini_import_file with store_id and file_name required', () => {
+      const tool = TOOLS.find(t => t.name === 'gemini_import_file');
+      expect(tool).toBeDefined();
+      expect(tool!.inputSchema.required).toContain('store_id');
+      expect(tool!.inputSchema.required).toContain('file_name');
+    });
+  });
+
+  // ========== Document Operations ==========
+  describe('Document Operations', () => {
+    it('should have gemini_list_documents with store_id required', () => {
       const tool = TOOLS.find(t => t.name === 'gemini_list_documents');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
+      expect(tool!.inputSchema.required).toContain('store_id');
     });
 
-    it('should have gemini_delete_document with corpus_id and document_id required', () => {
+    it('should have gemini_get_document with store_id and document_id required', () => {
+      const tool = TOOLS.find(t => t.name === 'gemini_get_document');
+      expect(tool).toBeDefined();
+      expect(tool!.inputSchema.required).toContain('store_id');
+      expect(tool!.inputSchema.required).toContain('document_id');
+    });
+
+    it('should have gemini_delete_document with document_name required', () => {
       const tool = TOOLS.find(t => t.name === 'gemini_delete_document');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_id');
+      expect(tool!.inputSchema.required).toContain('document_name');
       expect(tool!.inputSchema.properties.force).toBeDefined();
     });
   });
 
-  // ========== Content Upload Operations ==========
-  describe('Content Upload Operations', () => {
-    it('should have gemini_upload_text with corpus_id, document_name, text_content required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_upload_text');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_name');
-      expect(tool!.inputSchema.required).toContain('text_content');
-      expect(tool!.inputSchema.properties.chunk_size).toBeDefined();
-      expect(tool!.inputSchema.properties.chunk_overlap).toBeDefined();
-      expect(tool!.inputSchema.properties.metadata).toBeDefined();
-    });
-
-    it('should have gemini_import_url with corpus_id, url, document_name required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_import_url');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('url');
-      expect(tool!.inputSchema.required).toContain('document_name');
-    });
-
-    it('should have gemini_create_chunks with corpus_id, document_id, chunks required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_create_chunks');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_id');
-      expect(tool!.inputSchema.required).toContain('chunks');
-      expect(tool!.inputSchema.properties.chunks.type).toBe('array');
-    });
-  });
-
-  // ========== Chunk Management Operations ==========
-  describe('Chunk Management Operations', () => {
-    it('should have gemini_list_chunks with corpus_id and document_id required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_list_chunks');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_id');
-    });
-
-    it('should have gemini_get_chunk with corpus_id, document_id, chunk_id required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_get_chunk');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_id');
-      expect(tool!.inputSchema.required).toContain('chunk_id');
-    });
-
-    it('should have gemini_delete_chunk with corpus_id, document_id, chunk_id required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_delete_chunk');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('document_id');
-      expect(tool!.inputSchema.required).toContain('chunk_id');
-    });
-  });
-
-  // ========== Search & AI Operations ==========
-  describe('Search & AI Operations', () => {
-    it('should have gemini_search_store with corpus_id and query required', () => {
+  // ========== Search Operations ==========
+  describe('Search Operations', () => {
+    it('should have gemini_search_store with store_id and query required', () => {
       const tool = TOOLS.find(t => t.name === 'gemini_search_store');
       expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
-      expect(tool!.inputSchema.required).toContain('query');
-      expect(tool!.inputSchema.properties.results_count).toBeDefined();
-      expect(tool!.inputSchema.properties.metadata_filters).toBeDefined();
-    });
-
-    it('should have gemini_ai_agent with corpus_id and query required', () => {
-      const tool = TOOLS.find(t => t.name === 'gemini_ai_agent');
-      expect(tool).toBeDefined();
-      expect(tool!.inputSchema.required).toContain('corpus_id');
+      expect(tool!.inputSchema.required).toContain('store_id');
       expect(tool!.inputSchema.required).toContain('query');
       expect(tool!.inputSchema.properties.model).toBeDefined();
       expect(tool!.inputSchema.properties.temperature).toBeDefined();
       expect(tool!.inputSchema.properties.max_output_tokens).toBeDefined();
-      expect(tool!.inputSchema.properties.max_chunks_count).toBeDefined();
-      expect(tool!.inputSchema.properties.minimum_relevance_score).toBeDefined();
-      expect(tool!.inputSchema.properties.metadata_filters).toBeDefined();
+      expect(tool!.inputSchema.properties.top_k).toBeDefined();
+      expect(tool!.inputSchema.properties.metadata_filter).toBeDefined();
     });
   });
 
@@ -191,9 +141,7 @@ describe('MCP Tool Definitions', () => {
   describe('Bilingual Descriptions', () => {
     it('all tools should have both Thai and English in description', () => {
       for (const tool of TOOLS) {
-        // Check for Thai characters
         const hasThai = /[\u0E00-\u0E7F]/.test(tool.description);
-        // Check for English (pipe separator pattern)
         const hasEnglish = /[a-zA-Z]/.test(tool.description);
 
         expect(hasThai).toBe(true);
@@ -209,18 +157,13 @@ describe('MCP Tool Definitions', () => {
       'gemini_get_store',
       'gemini_list_stores',
       'gemini_delete_store',
-      'gemini_create_document',
-      'gemini_get_document',
-      'gemini_list_documents',
-      'gemini_delete_document',
       'gemini_upload_text',
       'gemini_import_url',
-      'gemini_create_chunks',
-      'gemini_list_chunks',
-      'gemini_get_chunk',
-      'gemini_delete_chunk',
+      'gemini_import_file',
+      'gemini_list_documents',
+      'gemini_get_document',
+      'gemini_delete_document',
       'gemini_search_store',
-      'gemini_ai_agent',
     ];
 
     it('should have all expected tools', () => {

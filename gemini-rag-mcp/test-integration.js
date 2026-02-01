@@ -1,25 +1,18 @@
+#!/usr/bin/env node
+
 /**
- * Integration Test - Gemini RAG File Search (Real API)
- *
- * ทดสอบทุก operation แบบ end-to-end ด้วย Gemini API จริง
- * รวมถึงการอัปโหลดเอกสารยาว (auto-chunk) และ import จาก URL
- *
- * Flow จริงของ RAG:
- *   1. สร้าง Store (Corpus)
- *   2. สร้าง Document + metadata
- *   3. อัปโหลดเนื้อหา → auto-split เป็น chunks
- *   4. รอ indexing
- *   5. Search (semantic search)
- *   6. AI Agent (search + generate answer)
- *   7. Cleanup
- *
- * Environment Variables:
- *   GEMINI_API_KEY  - Gemini API key (required)
- *   TEST_SCOPE      - "all" | "store-only" | "search-only" | "upload-only" (default: "all")
+ * Integration Tests for Gemini File Search API
+ * Tests real API calls against fileSearchStores endpoints
  *
  * Usage:
  *   GEMINI_API_KEY=xxx node test-integration.js
- *   GEMINI_API_KEY=xxx TEST_SCOPE=upload-only node test-integration.js
+ *   GEMINI_API_KEY=xxx TEST_SCOPE=store-only node test-integration.js
+ *
+ * Test Scopes:
+ *   all          - Run all tests (default)
+ *   store-only   - Only store CRUD operations
+ *   upload-only  - Store + upload + documents
+ *   search-only  - Store + upload + search
  */
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -28,144 +21,53 @@ const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
 if (!API_KEY) {
   console.error('ERROR: GEMINI_API_KEY environment variable is required');
-  console.error('  Usage: GEMINI_API_KEY=xxx node test-integration.js');
   process.exit(1);
 }
-
-// ============================================
-// Simulated Documents (เหมือนอ่านจากไฟล์จริง)
-// ============================================
-
-// เอกสาร 1: คู่มือผลิตภัณฑ์ (ยาว ~2000 ตัวอักษร จะถูก auto-chunk)
-const PRODUCT_MANUAL = `
-# คู่มือการใช้งาน SmartHome Hub Pro v3.0
-
-## บทที่ 1: การติดตั้ง
-
-### 1.1 ข้อกำหนดของระบบ
-SmartHome Hub Pro ต้องการ WiFi 2.4GHz หรือ 5GHz, พื้นที่ว่างอย่างน้อย 50MB และระบบปฏิบัติการ iOS 15+ หรือ Android 12+ สำหรับแอปควบคุม Hub สามารถเชื่อมต่ออุปกรณ์ได้สูงสุด 200 เครื่องพร้อมกัน
-
-### 1.2 ขั้นตอนการติดตั้ง
-1. เสียบสาย power adapter เข้ากับ Hub แล้วเสียบปลั๊กไฟ
-2. รอให้ไฟ LED กะพริบสีฟ้า (ประมาณ 30 วินาที)
-3. เปิดแอป SmartHome บนมือถือ แล้วกด "เพิ่มอุปกรณ์ใหม่"
-4. เลือก "SmartHome Hub Pro" จากรายการอุปกรณ์
-5. สแกน QR Code ที่ด้านล่างของ Hub
-6. เชื่อมต่อ WiFi ของบ้าน แล้วรอการตั้งค่าเสร็จสิ้น (ประมาณ 2 นาที)
-7. ตั้งชื่อ Hub และเลือกห้องที่ติดตั้ง
-
-### 1.3 การเชื่อมต่ออุปกรณ์
-Hub Pro รองรับโปรโตคอล Zigbee, Z-Wave, WiFi, Bluetooth LE และ Matter รองรับอุปกรณ์กว่า 5,000 รุ่น จากผู้ผลิตกว่า 200 แบรนด์ รวมถึง Philips Hue, IKEA TRADFRI, Xiaomi, Samsung SmartThings
-
-## บทที่ 2: การใช้งาน
-
-### 2.1 การควบคุมด้วยเสียง
-Hub Pro รองรับ Google Assistant, Amazon Alexa และ Apple Siri สามารถสั่งงานด้วยเสียงภาษาไทยได้ เช่น "สวัสดี Hub เปิดไฟห้องนอน" หรือ "ปรับอุณหภูมิแอร์เป็น 25 องศา"
-
-### 2.2 การตั้งค่า Automation
-สร้าง Automation แบบ if-then ได้ เช่น:
-- ถ้าเวลา 18:00 → เปิดไฟห้องนั่งเล่น
-- ถ้าอุณหภูมิเกิน 30 องศา → เปิดแอร์
-- ถ้าเปิดประตูหน้าบ้าน → ส่งแจ้งเตือนไปที่มือถือ
-- ถ้าไม่มีคนในห้อง 30 นาที → ปิดไฟและแอร์อัตโนมัติ
-
-### 2.3 การจัดการพลังงาน
-Hub Pro มีฟีเจอร์ Energy Dashboard ที่แสดงการใช้พลังงานของอุปกรณ์ทุกชิ้นแบบ real-time สามารถตั้ง budget พลังงานรายเดือน และรับแจ้งเตือนเมื่อใกล้ถึงขีดจำกัด ช่วยประหยัดค่าไฟได้ถึง 30%
-
-## บทที่ 3: การแก้ไขปัญหา
-
-### 3.1 Hub ไม่เชื่อมต่อ WiFi
-- ตรวจสอบว่า router อยู่ในระยะ 10 เมตร
-- รีสตาร์ท Hub โดยถอดสาย power แล้วเสียบใหม่
-- ตรวจสอบว่า WiFi ใช้ WPA2 หรือ WPA3 (ไม่รองรับ WEP)
-- ลอง reset WiFi โดยกดปุ่ม reset ค้าง 10 วินาที
-
-### 3.2 อุปกรณ์ไม่ตอบสนอง
-- ตรวจสอบแบตเตอรี่ของอุปกรณ์
-- ลองลบอุปกรณ์แล้วเพิ่มใหม่
-- ตรวจสอบว่า firmware ของ Hub เป็นเวอร์ชันล่าสุด
-- ติดต่อ support@smarthomepro.com หรือโทร 02-xxx-xxxx
-
-## บทที่ 4: ข้อมูลจำเพาะ
-
-| รายการ | ข้อมูล |
-|--------|--------|
-| รุ่น | SmartHome Hub Pro v3.0 |
-| ขนาด | 12 x 12 x 4 cm |
-| น้ำหนัก | 280g |
-| WiFi | 802.11 a/b/g/n/ac/ax |
-| Zigbee | 3.0 |
-| Z-Wave | Plus V2 |
-| Bluetooth | 5.2 LE |
-| Matter | 1.0 |
-| CPU | Quad-core ARM Cortex-A55 |
-| RAM | 2GB |
-| Storage | 8GB eMMC |
-| Power | 5V/2A USB-C |
-| ราคา | 3,990 บาท |
-| รับประกัน | 2 ปี |
-`.trim();
-
-// เอกสาร 2: นโยบายบริษัท (สั้นกว่า)
-const COMPANY_POLICY = `
-# นโยบายการคืนสินค้าและรับประกัน SmartHome Pro
-
-## การรับประกัน
-- ระยะรับประกัน 2 ปี นับจากวันที่ซื้อ
-- ครอบคลุมความเสียหายจากการผลิต ไม่รวมความเสียหายจากการใช้งานผิดวิธี
-- ซ่อมฟรีภายใน 1 ปีแรก ปีที่ 2 คิดค่าอะไหล่ตามจริง
-- ไม่ครอบคลุมความเสียหายจากน้ำ, ไฟไหม้, หรือภัยธรรมชาติ
-
-## การคืนสินค้า
-- คืนได้ภายใน 30 วัน หากสินค้ามีปัญหาจากการผลิต
-- สินค้าต้องอยู่ในสภาพสมบูรณ์ พร้อมกล่องและอุปกรณ์เสริมครบ
-- คืนเงินเต็มจำนวนภายใน 7-14 วันทำการ
-- กรณีเปลี่ยนใจ คืนได้ภายใน 7 วัน หักค่าธรรมเนียม 15%
-
-## การส่งซ่อม
-- ส่งซ่อมผ่านศูนย์บริการ 50 สาขาทั่วประเทศ
-- หรือส่งทางไปรษณีย์ ค่าส่งฟรีทุกครั้ง
-- ระยะเวลาซ่อม 3-5 วันทำการ
-- มีเครื่องสำรองให้ยืมระหว่างรอซ่อม (เฉพาะสมาชิก Premium)
-
-## ติดต่อฝ่ายบริการ
-- Line: @SmartHomePro
-- Email: support@smarthomepro.com
-- โทร: 02-123-4567 (จ-ศ 9:00-18:00)
-- Chat: smarthomepro.com/support (24 ชม.)
-`.trim();
 
 // ============================================
 // Test State
 // ============================================
 const state = {
-  corpusName: null,
-  doc1Name: null, // Product manual (long, auto-chunked)
-  doc2Name: null, // Company policy
-  doc3Name: null, // URL import
-  chunkNames: [],
-  totalChunks: 0,
+  storeName: null,      // fileSearchStores/{id}
+  documentName: null,   // fileSearchStores/{id}/documents/{doc_id}
+  fileName: null,       // files/{file_id}
 };
 
-const results = {
-  total: 0,
-  passed: 0,
-  failed: 0,
-  skipped: 0,
-  tests: [],
-  startTime: Date.now(),
-};
+const results = { passed: 0, failed: 0, skipped: 0 };
 
 // ============================================
-// HTTP Helper
+// Helpers
 // ============================================
+async function test(name, fn) {
+  try {
+    await fn();
+    results.passed++;
+    console.log(`  [PASS] ${name}`);
+  } catch (err) {
+    results.failed++;
+    console.log(`  [FAIL] ${name}`);
+    console.log(`         ${err.message}`);
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message || 'Assertion failed');
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function api(endpoint, options = {}) {
   const separator = endpoint.includes('?') ? '&' : '?';
   const url = `${BASE_URL}/${endpoint}${separator}key=${API_KEY}`;
 
   const response = await fetch(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
   const text = await response.text();
@@ -184,593 +86,388 @@ async function api(endpoint, options = {}) {
   return { ok: response.ok, status: response.status, data };
 }
 
-// ============================================
-// Text Splitting (เหมือนใน gemini-client.ts)
-// ============================================
-function splitText(text, chunkSize = 800, overlap = 100) {
-  const chunks = [];
-  const sentences = text.split(/(?<=[.!?\n])\s+/);
-  let currentChunk = '';
+async function uploadApi(endpoint, body, contentType) {
+  const url = `https://generativelanguage.googleapis.com/upload/v1beta/${endpoint}?key=${API_KEY}`;
 
-  for (const sentence of sentences) {
-    if (currentChunk.length + sentence.length > chunkSize && currentChunk.length > 0) {
-      chunks.push(currentChunk.trim());
-      if (overlap > 0) {
-        const overlapText = currentChunk.slice(-overlap);
-        currentChunk = overlapText + ' ' + sentence;
-      } else {
-        currentChunk = sentence;
-      }
-    } else {
-      currentChunk += (currentChunk ? ' ' : '') + sentence;
-    }
-  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body,
+  });
 
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
-  }
-
-  return chunks;
-}
-
-// ============================================
-// Test Runner
-// ============================================
-async function test(name, fn) {
-  results.total++;
-  const start = Date.now();
-
+  const text = await response.text();
+  let data = null;
   try {
-    await fn();
-    const duration = Date.now() - start;
-    results.passed++;
-    results.tests.push({ name, status: 'passed', duration });
-    console.log(`  PASS: ${name} (${duration}ms)`);
-  } catch (err) {
-    const duration = Date.now() - start;
-    results.failed++;
-    results.tests.push({ name, status: 'failed', duration, error: err.message });
-    console.error(`  FAIL: ${name} (${duration}ms)`);
-    console.error(`     Error: ${err.message}`);
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
   }
-}
 
-function skip(name, reason = '') {
-  results.total++;
-  results.skipped++;
-  results.tests.push({ name, status: 'skipped', reason });
-  console.log(`  SKIP: ${name}${reason ? ` (${reason})` : ''}`);
-}
+  if (!response.ok) {
+    console.log(`     [UPLOAD ${response.status}] ${endpoint}`);
+    if (text) console.log(`     [Response] ${text.substring(0, 500)}`);
+  }
 
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return { ok: response.ok, status: response.status, data };
 }
 
 // ============================================
-// Test Suite 1: Store (Corpus) CRUD
+// Test Suite 1: Store (FileSearchStore) CRUD
 // ============================================
 async function testStoreOperations() {
-  console.log('\n== Store (Corpus) Operations ==');
+  console.log('\n== FileSearchStore Operations ==');
   console.log('-'.repeat(50));
 
-  await test('Create Store', async () => {
-    const { ok, data } = await api('corpora', {
+  await test('Create FileSearchStore', async () => {
+    const { ok, data } = await api('fileSearchStores', {
       method: 'POST',
-      body: JSON.stringify({ displayName: `RAG Test ${Date.now()}` }),
+      body: JSON.stringify({
+        displayName: `Integration Test Store ${Date.now()}`,
+      }),
     });
-    assert(ok, `Failed to create corpus: ${JSON.stringify(data)}`);
-    assert(data.name, 'Corpus name is missing');
-    assert(data.name.startsWith('corpora/'), `Invalid corpus name: ${data.name}`);
-    state.corpusName = data.name;
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    assert(data.name, 'No store name returned');
+    assert(data.name.startsWith('fileSearchStores/'), 'Invalid store name format');
+    state.storeName = data.name;
+    console.log(`     Created: ${state.storeName}`);
   });
 
-  await test('List Stores', async () => {
-    const { ok, data } = await api('corpora?pageSize=10', { method: 'GET' });
-    assert(ok, `Failed to list corpora: ${JSON.stringify(data)}`);
-    assert(Array.isArray(data.corpora), 'corpora should be an array');
-    const found = data.corpora.find(c => c.name === state.corpusName);
-    assert(found, 'Created corpus not found in list');
+  await test('Get FileSearchStore', async () => {
+    const { ok, data } = await api(state.storeName);
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    assert(data.name === state.storeName, 'Store name mismatch');
+    console.log(`     Name: ${data.name}, Display: ${data.displayName}`);
   });
 
-  await test('Get Store', async () => {
-    const { ok, data } = await api(state.corpusName, { method: 'GET' });
-    assert(ok, `Failed to get corpus: ${JSON.stringify(data)}`);
-    assert(data.name === state.corpusName, 'Corpus name mismatch');
-    assert(data.displayName, 'Display name is missing');
+  await test('List FileSearchStores', async () => {
+    const { ok, data } = await api('fileSearchStores?pageSize=20');
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    const stores = data.fileSearchStores || [];
+    assert(stores.length > 0, 'No stores found');
+    const found = stores.find(s => s.name === state.storeName);
+    assert(found, 'Created store not found in list');
+    console.log(`     Found ${stores.length} store(s)`);
   });
 }
 
 // ============================================
-// Test Suite 2: Document + Long Text Upload (auto-chunk)
+// Test Suite 2: Upload Text Content
 // ============================================
-async function testDocumentUpload() {
-  console.log('\n== Document Upload (RAG flow) ==');
+async function testUploadOperations() {
+  console.log('\n== Upload Operations ==');
   console.log('-'.repeat(50));
 
-  // Upload Doc 1: Product Manual (long text, auto-chunk)
-  await test('Create Document 1 (Product Manual) with metadata', async () => {
-    const { ok, data } = await api(`${state.corpusName}/documents`, {
-      method: 'POST',
-      body: JSON.stringify({
-        displayName: 'SmartHome Hub Pro Manual v3.0',
-        customMetadata: [
-          { key: 'category', stringValue: 'manual' },
-          { key: 'project', stringValue: 'smarthome-hub' },
-          { key: 'priority', numericValue: 1 },
-        ],
-      }),
+  const sampleText = `
+# SmartHome Hub Pro - คู่มือการใช้งาน
+
+## การติดตั้ง
+1. เสียบปลั๊กไฟ Hub Pro เข้ากับเต้าเสียบ
+2. เปิดแอป SmartHome บนมือถือ
+3. กด "เพิ่มอุปกรณ์ใหม่" แล้วเลือก "Hub Pro"
+4. รอจน LED เป็นสีเขียว แสดงว่าเชื่อมต่อสำเร็จ
+
+## โปรโตคอลที่รองรับ
+- WiFi 6 (802.11ax)
+- Zigbee 3.0
+- Bluetooth 5.0
+- Matter/Thread
+
+## การแก้ปัญหา WiFi
+หาก Hub เชื่อมต่อ WiFi ไม่ได้:
+1. ตรวจสอบว่า router ทำงานปกติ
+2. ย้าย Hub ให้อยู่ใกล้ router มากขึ้น
+3. รีสตาร์ท Hub โดยถอดปลั๊กรอ 10 วินาที
+4. ลอง reset WiFi ในแอป SmartHome
+
+## นโยบายการคืนสินค้า
+- คืนได้ภายใน 30 วันหลังซื้อ
+- สินค้าต้องอยู่ในสภาพสมบูรณ์
+- ต้องมีใบเสร็จรับเงิน
+- สินค้าที่เปิดใช้แล้ว คืนได้เฉพาะกรณีชำรุดเท่านั้น
+`.trim();
+
+  await test('Upload text to FileSearchStore (multipart)', async () => {
+    const boundary = '---BOUNDARY---';
+    const metadata = JSON.stringify({
+      displayName: 'SmartHome Hub Pro Manual',
+      customMetadata: [
+        { key: 'category', stringValue: 'manual' },
+        { key: 'language', stringValue: 'thai' },
+      ],
     });
-    assert(ok, `Failed to create document: ${JSON.stringify(data)}`);
-    state.doc1Name = data.name;
-  });
 
-  await test('Auto-chunk & upload Product Manual (~2000 chars)', async () => {
-    const chunks = splitText(PRODUCT_MANUAL, 800, 100);
-    console.log(`     Split into ${chunks.length} chunks (800 chars each, 100 overlap)`);
+    const body = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      metadata,
+      `--${boundary}`,
+      'Content-Type: text/plain',
+      '',
+      sampleText,
+      `--${boundary}--`,
+    ].join('\r\n');
 
-    const { ok, data } = await api(`${state.doc1Name}/chunks:batchCreate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: chunks.map(text => ({
-          chunk: { data: { stringValue: text } },
-        })),
-      }),
-    });
-    assert(ok, `Failed to batch create chunks: ${JSON.stringify(data)}`);
-    assert(Array.isArray(data.chunks), 'chunks should be an array');
-    assert(data.chunks.length === chunks.length, `Expected ${chunks.length} chunks, got ${data.chunks.length}`);
-    state.totalChunks += data.chunks.length;
-    data.chunks.forEach(c => state.chunkNames.push(c.name));
-    console.log(`     Uploaded ${data.chunks.length} chunks successfully`);
-  });
-
-  // Upload Doc 2: Company Policy
-  await test('Create Document 2 (Company Policy) with metadata', async () => {
-    const { ok, data } = await api(`${state.corpusName}/documents`, {
-      method: 'POST',
-      body: JSON.stringify({
-        displayName: 'Return & Warranty Policy',
-        customMetadata: [
-          { key: 'category', stringValue: 'policy' },
-          { key: 'project', stringValue: 'smarthome-hub' },
-          { key: 'priority', numericValue: 2 },
-        ],
-      }),
-    });
+    const { ok, data } = await uploadApi(
+      `${state.storeName}:upload`,
+      body,
+      `multipart/related; boundary=${boundary}`
+    );
     assert(ok, `Failed: ${JSON.stringify(data)}`);
-    state.doc2Name = data.name;
-  });
+    console.log(`     Upload response: ${JSON.stringify(data).substring(0, 200)}`);
 
-  await test('Auto-chunk & upload Company Policy', async () => {
-    const chunks = splitText(COMPANY_POLICY, 800, 100);
-    console.log(`     Split into ${chunks.length} chunks`);
-
-    const { ok, data } = await api(`${state.doc2Name}/chunks:batchCreate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: chunks.map(text => ({
-          chunk: { data: { stringValue: text } },
-        })),
-      }),
-    });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    state.totalChunks += data.chunks.length;
-    console.log(`     Uploaded ${data.chunks.length} chunks`);
-  });
-
-  // List documents
-  await test('List Documents (should have 2)', async () => {
-    const { ok, data } = await api(`${state.corpusName}/documents?pageSize=10`, { method: 'GET' });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.documents.length >= 2, `Expected 2+ docs, got ${data.documents.length}`);
-  });
-
-  // Get document detail
-  await test('Get Document detail (verify metadata)', async () => {
-    const { ok, data } = await api(state.doc1Name, { method: 'GET' });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.displayName === 'SmartHome Hub Pro Manual v3.0', 'Name mismatch');
-  });
-
-  // List chunks
-  await test(`List Chunks (should have ${state.totalChunks} total)`, async () => {
-    const { ok, data } = await api(`${state.doc1Name}/chunks?pageSize=100`, { method: 'GET' });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.chunks.length > 0, 'Should have chunks');
-    console.log(`     Doc 1 has ${data.chunks.length} chunks`);
-  });
-
-  // Get single chunk
-  await test('Get Chunk (verify content)', async () => {
-    const { ok, data } = await api(state.chunkNames[0], { method: 'GET' });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.data?.stringValue, 'Chunk text is missing');
-    assert(data.data.stringValue.length > 50, 'Chunk should have substantial content');
-    console.log(`     Chunk preview: ${data.data.stringValue.substring(0, 80)}...`);
+    // If it returns an operation, poll it
+    if (data.name && !data.done) {
+      console.log(`     Polling operation: ${data.name}`);
+      let op = data;
+      for (let i = 0; i < 30; i++) {
+        await sleep(2000);
+        const pollResult = await api(op.name);
+        if (pollResult.ok && pollResult.data.done) {
+          console.log(`     Operation completed after ${(i + 1) * 2}s`);
+          break;
+        }
+        if (i === 29) {
+          console.log(`     Warning: operation not done after 60s`);
+        }
+      }
+    }
   });
 
   // Wait for indexing
-  console.log(`\n  Waiting 15s for ${state.totalChunks} chunks to be indexed...`);
-  await sleep(15000);
-}
+  console.log('  [INFO] Waiting 10s for document indexing...');
+  await sleep(10000);
 
-// ============================================
-// Test Suite 3: URL Import
-// ============================================
-async function testUrlImport() {
-  console.log('\n== URL Import ==');
-  console.log('-'.repeat(50));
-
-  // Fetch a public URL and create document from its content
-  await test('Import content from public URL', async () => {
-    // ดึงเนื้อหาจาก URL
-    let textContent;
-    try {
-      const response = await fetch('https://raw.githubusercontent.com/anthropics/anthropic-cookbook/main/README.md');
-      if (!response.ok) {
-        skip('Import from URL', 'URL not accessible');
-        return;
-      }
-      textContent = await response.text();
-    } catch {
-      skip('Import from URL', 'Network error');
-      return;
+  await test('List documents in store', async () => {
+    const { ok, data } = await api(`${state.storeName}/documents?pageSize=20`);
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    const docs = data.documents || [];
+    console.log(`     Found ${docs.length} document(s)`);
+    if (docs.length > 0) {
+      state.documentName = docs[0].name;
+      console.log(`     First doc: ${docs[0].name} (${docs[0].displayName || 'unnamed'})`);
     }
-
-    assert(textContent.length > 100, 'URL content too short');
-
-    // สร้าง document
-    const { ok: docOk, data: docData } = await api(`${state.corpusName}/documents`, {
-      method: 'POST',
-      body: JSON.stringify({
-        displayName: 'Anthropic Cookbook README (imported from URL)',
-        customMetadata: [
-          { key: 'category', stringValue: 'imported' },
-          { key: 'project', stringValue: 'url-import-test' },
-        ],
-      }),
-    });
-    assert(docOk, `Failed to create doc: ${JSON.stringify(docData)}`);
-    state.doc3Name = docData.name;
-
-    // แบ่ง chunks แล้วอัปโหลด
-    const chunks = splitText(textContent, 800, 100);
-    // จำกัดแค่ 10 chunks แรก (ประหยัด quota)
-    const limitedChunks = chunks.slice(0, 10);
-
-    const { ok: chunkOk, data: chunkData } = await api(`${state.doc3Name}/chunks:batchCreate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        requests: limitedChunks.map(text => ({
-          chunk: { data: { stringValue: text } },
-        })),
-      }),
-    });
-    assert(chunkOk, `Failed to upload chunks: ${JSON.stringify(chunkData)}`);
-    state.totalChunks += chunkData.chunks.length;
-    console.log(`     Imported ${chunkData.chunks.length} chunks from URL (${textContent.length} chars total)`);
   });
+
+  if (state.documentName) {
+    await test('Get document details', async () => {
+      const { ok, data } = await api(state.documentName);
+      assert(ok, `Failed: ${JSON.stringify(data)}`);
+      assert(data.name === state.documentName, 'Document name mismatch');
+      console.log(`     Document: ${data.name}`);
+      if (data.customMetadata) {
+        console.log(`     Metadata: ${JSON.stringify(data.customMetadata)}`);
+      }
+    });
+  }
 }
 
 // ============================================
-// Test Suite 4: Semantic Search
+// Test Suite 3: Search (generateContent + file_search)
 // ============================================
 async function testSearchOperations() {
-  console.log('\n== Search Operations (RAG) ==');
+  console.log('\n== Search Operations (generateContent + file_search) ==');
   console.log('-'.repeat(50));
 
-  await test('Search: installation steps (Thai)', async () => {
-    const { ok, data } = await api(`${state.corpusName}:query`, {
+  await test('Search: Installation question (Thai)', async () => {
+    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
-        query: 'ขั้นตอนการติดตั้ง SmartHome Hub มีอะไรบ้าง',
-        resultsCount: 5,
+        contents: [{
+          role: 'user',
+          parts: [{ text: 'อธิบายขั้นตอนการติดตั้ง SmartHome Hub Pro ตั้งแต่ต้นจนจบ' }],
+        }],
+        tools: [{
+          fileSearch: {
+            fileSearchStoreNames: [state.storeName],
+          },
+        }],
       }),
     });
     assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.relevantChunks?.length > 0, 'Should have results');
-    const top = data.relevantChunks[0];
-    console.log(`     Score: ${top.chunkRelevanceScore.toFixed(4)}`);
-    console.log(`     Match: ${top.chunk.data.stringValue.substring(0, 100)}...`);
-  });
-
-  await test('Search: warranty policy', async () => {
-    const { ok, data } = await api(`${state.corpusName}:query`, {
-      method: 'POST',
-      body: JSON.stringify({
-        query: 'ระยะเวลารับประกันเท่าไหร่ คืนสินค้าได้กี่วัน',
-        resultsCount: 5,
-      }),
-    });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.relevantChunks?.length > 0, 'Should have results');
-    console.log(`     Found ${data.relevantChunks.length} relevant chunks`);
-  });
-
-  await test('Search: voice control (should find in manual)', async () => {
-    const { ok, data } = await api(`${state.corpusName}:query`, {
-      method: 'POST',
-      body: JSON.stringify({
-        query: 'สั่งงานด้วยเสียงได้ไหม รองรับ Google Assistant หรือ Alexa',
-        resultsCount: 3,
-      }),
-    });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.relevantChunks?.length > 0, 'Should have results about voice control');
-    console.log(`     Score: ${data.relevantChunks[0].chunkRelevanceScore.toFixed(4)}`);
-  });
-
-  await test('Search: energy management', async () => {
-    const { ok, data } = await api(`${state.corpusName}:query`, {
-      method: 'POST',
-      body: JSON.stringify({
-        query: 'ช่วยประหยัดค่าไฟได้ไหม มีฟีเจอร์จัดการพลังงานอะไรบ้าง',
-        resultsCount: 3,
-      }),
-    });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    assert(data.relevantChunks?.length > 0, 'Should find energy dashboard info');
-  });
-
-  await test('Search with metadata filter (category=policy)', async () => {
-    const { ok, data } = await api(`${state.corpusName}:query`, {
-      method: 'POST',
-      body: JSON.stringify({
-        query: 'ติดต่อฝ่ายบริการได้ทางไหนบ้าง',
-        resultsCount: 5,
-        metadataFilters: [
-          { key: 'category', conditions: [{ stringValue: 'policy', operation: 'EQUAL' }] },
-        ],
-      }),
-    });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    // metadata filter may not be supported on all chunks, but query should succeed
-    console.log(`     Results: ${data.relevantChunks?.length || 0} chunks (filtered by category=policy)`);
-  });
-}
-
-// ============================================
-// Test Suite 5: AI Agent (RAG + Generate)
-// ============================================
-async function testAIAgentOperations() {
-  console.log('\n== AI Agent (RAG + Generate Answer) ==');
-  console.log('-'.repeat(50));
-
-  await test('AI Agent: How to install the hub? (Thai)', async () => {
-    const content = { parts: [{ text: 'อธิบายขั้นตอนการติดตั้ง SmartHome Hub Pro ตั้งแต่ต้นจนจบ' }] };
-    const { ok, data } = await api('models/aqa:generateAnswer', {
-      method: 'POST',
-      body: JSON.stringify({
-        contents: [content],
-        semanticRetriever: {
-          source: state.corpusName,
-          query: content,
-        },
-        answerStyle: 'VERBOSE',
-      }),
-    });
-    assert(ok, `Failed: ${JSON.stringify(data)}`);
-    const answer = data.answer?.content?.parts?.[0]?.text;
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
     assert(answer, 'No answer generated');
     assert(answer.length > 20, 'Answer too short');
     console.log(`     Answer (${answer.length} chars): ${answer.substring(0, 200)}...`);
-    console.log(`     Answerable probability: ${data.answerableProbability || 'N/A'}`);
+
+    const grounding = data.candidates?.[0]?.groundingMetadata;
+    if (grounding?.groundingChunks) {
+      console.log(`     Grounding chunks: ${grounding.groundingChunks.length}`);
+    }
   });
 
-  await test('AI Agent: Return policy question', async () => {
-    const content = { parts: [{ text: 'ซื้อสินค้าไปแล้ว 20 วัน อยากคืน ทำได้ไหม มีเงื่อนไขอะไรบ้าง' }] };
-    const { ok, data } = await api('models/aqa:generateAnswer', {
+  await test('Search: Return policy question', async () => {
+    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
-        contents: [content],
-        semanticRetriever: {
-          source: state.corpusName,
-          query: content,
-        },
-        answerStyle: 'VERBOSE',
+        contents: [{
+          role: 'user',
+          parts: [{ text: 'ซื้อสินค้าไปแล้ว 20 วัน อยากคืน ทำได้ไหม มีเงื่อนไขอะไรบ้าง' }],
+        }],
+        tools: [{
+          fileSearch: {
+            fileSearchStoreNames: [state.storeName],
+          },
+        }],
       }),
     });
     assert(ok, `Failed: ${JSON.stringify(data)}`);
-    const answer = data.answer?.content?.parts?.[0]?.text;
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
     assert(answer, 'No answer generated');
     console.log(`     Answer: ${answer.substring(0, 200)}...`);
   });
 
-  await test('AI Agent: English query on Thai docs', async () => {
-    const content = { parts: [{ text: 'What smart home protocols does the Hub Pro support?' }] };
-    const { ok, data } = await api('models/aqa:generateAnswer', {
+  await test('Search: English query on Thai docs', async () => {
+    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
-        contents: [content],
-        semanticRetriever: {
-          source: state.corpusName,
-          query: content,
-        },
-        answerStyle: 'VERBOSE',
+        contents: [{
+          role: 'user',
+          parts: [{ text: 'What smart home protocols does the Hub Pro support?' }],
+        }],
+        tools: [{
+          fileSearch: {
+            fileSearchStoreNames: [state.storeName],
+          },
+        }],
       }),
     });
     assert(ok, `Failed: ${JSON.stringify(data)}`);
-    const answer = data.answer?.content?.parts?.[0]?.text;
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
     assert(answer, 'No answer generated');
     console.log(`     Answer: ${answer.substring(0, 200)}...`);
   });
 
-  await test('AI Agent: Troubleshooting question', async () => {
-    const content = { parts: [{ text: 'Hub เชื่อมต่อ WiFi ไม่ได้ ต้องทำอย่างไร' }] };
-    const { ok, data } = await api('models/aqa:generateAnswer', {
+  await test('Search: WiFi troubleshooting', async () => {
+    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
-        contents: [content],
-        semanticRetriever: {
-          source: state.corpusName,
-          query: content,
-        },
-        answerStyle: 'VERBOSE',
+        contents: [{
+          role: 'user',
+          parts: [{ text: 'Hub เชื่อมต่อ WiFi ไม่ได้ ต้องทำอย่างไร' }],
+        }],
+        tools: [{
+          fileSearch: {
+            fileSearchStoreNames: [state.storeName],
+          },
+        }],
       }),
     });
     assert(ok, `Failed: ${JSON.stringify(data)}`);
-    const answer = data.answer?.content?.parts?.[0]?.text;
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    assert(answer, 'No answer generated');
+    console.log(`     Answer: ${answer.substring(0, 200)}...`);
+  });
+
+  await test('Search: With topK parameter', async () => {
+    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
+      method: 'POST',
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [{ text: 'สรุปคู่มือทั้งหมด' }],
+        }],
+        tools: [{
+          fileSearch: {
+            fileSearchStoreNames: [state.storeName],
+            topK: 3,
+          },
+        }],
+      }),
+    });
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text;
     assert(answer, 'No answer generated');
     console.log(`     Answer: ${answer.substring(0, 200)}...`);
   });
 }
 
 // ============================================
-// Test Suite 6: Chunk Management + Cleanup
+// Test Suite 4: Document Management + Cleanup
 // ============================================
-async function testChunkManagement() {
-  console.log('\n== Chunk Management ==');
+async function testDocumentManagement() {
+  console.log('\n== Document Management + Cleanup ==');
   console.log('-'.repeat(50));
 
-  if (state.chunkNames.length > 0) {
-    await test('Delete single Chunk', async () => {
-      const { ok, data } = await api(state.chunkNames[0], { method: 'DELETE' });
+  if (state.documentName) {
+    await test('Delete document (force=true)', async () => {
+      const { ok, data } = await api(`${state.documentName}?force=true`, {
+        method: 'DELETE',
+      });
       assert(ok, `Failed: ${JSON.stringify(data)}`);
-    });
-
-    await test('Verify Chunk deleted', async () => {
-      const { ok, status } = await api(state.chunkNames[0], { method: 'GET' });
-      assert(!ok, 'Deleted chunk should not exist');
-    });
-  }
-}
-
-async function testDeleteOperations() {
-  console.log('\n== Cleanup ==');
-  console.log('-'.repeat(50));
-
-  // Delete doc 1
-  if (state.doc1Name) {
-    await test('Delete Document 1 (force)', async () => {
-      const { ok, data } = await api(`${state.doc1Name}?force=true`, { method: 'DELETE' });
-      assert(ok, `Failed: ${JSON.stringify(data)}`);
+      console.log(`     Deleted: ${state.documentName}`);
     });
   }
 
-  // Delete doc 2
-  if (state.doc2Name) {
-    await test('Delete Document 2 (force)', async () => {
-      const { ok, data } = await api(`${state.doc2Name}?force=true`, { method: 'DELETE' });
-      assert(ok, `Failed: ${JSON.stringify(data)}`);
+  await test('Delete FileSearchStore (force=true)', async () => {
+    const { ok, data } = await api(`${state.storeName}?force=true`, {
+      method: 'DELETE',
     });
-  }
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    console.log(`     Deleted: ${state.storeName}`);
+  });
 
-  // Delete doc 3 (URL import)
-  if (state.doc3Name) {
-    await test('Delete Document 3 - URL import (force)', async () => {
-      const { ok, data } = await api(`${state.doc3Name}?force=true`, { method: 'DELETE' });
-      assert(ok, `Failed: ${JSON.stringify(data)}`);
-    });
-  }
-
-  // Delete corpus
-  if (state.corpusName) {
-    await test('Delete Store (force)', async () => {
-      const { ok, data } = await api(`${state.corpusName}?force=true`, { method: 'DELETE' });
-      assert(ok, `Failed: ${JSON.stringify(data)}`);
-    });
-
-    await test('Verify Store deleted', async () => {
-      const { ok, status } = await api(state.corpusName, { method: 'GET' });
-      assert(!ok, 'Corpus should not exist after deletion');
-    });
-  }
+  await test('Verify store deleted', async () => {
+    const { ok, status } = await api(state.storeName);
+    assert(!ok, 'Store should be deleted');
+    assert(status === 404, `Expected 404, got ${status}`);
+    console.log(`     Store correctly returns 404`);
+  });
 }
 
 // ============================================
 // Main Runner
 // ============================================
 async function main() {
-  console.log('=== Gemini RAG File Search - Integration Test ===');
-  console.log('='.repeat(50));
-  console.log(`  Scope:    ${TEST_SCOPE}`);
-  console.log(`  API Key:  ${API_KEY.substring(0, 8)}...${API_KEY.slice(-4)}`);
-  console.log(`  Time:     ${new Date().toISOString()}`);
-  console.log('='.repeat(50));
+  console.log('='.repeat(60));
+  console.log('Gemini File Search API - Integration Tests');
+  console.log('='.repeat(60));
+  console.log(`Scope: ${TEST_SCOPE}`);
+  console.log(`API: ${BASE_URL}`);
+  console.log(`Time: ${new Date().toISOString()}`);
 
   try {
-    // Verify API key
-    console.log('\nVerifying API Key...');
-    const { ok, data } = await api('corpora?pageSize=1', { method: 'GET' });
-    if (!ok) {
-      console.error(`API Key verification failed: ${JSON.stringify(data)}`);
-      process.exit(1);
-    }
-    console.log('  API Key is valid\n');
+    // Always run store tests
+    await testStoreOperations();
 
-    // Run test suites based on scope
-    const runUpload = ['all', 'upload-only', 'store-only'].includes(TEST_SCOPE);
-    const runSearch = ['all', 'search-only'].includes(TEST_SCOPE);
-
-    if (runUpload) {
-      await testStoreOperations();
-      await testDocumentUpload();
-    }
-
-    if (TEST_SCOPE === 'all') {
-      await testUrlImport();
-    }
-
-    if (runSearch) {
-      if (!state.corpusName) {
-        console.log('\n  Search tests require store + upload to run first');
-        console.log('  Run with TEST_SCOPE=all');
-      } else {
-        await testSearchOperations();
-        await testAIAgentOperations();
+    if (TEST_SCOPE === 'store-only') {
+      // Cleanup store
+      if (state.storeName) {
+        console.log('\n  [INFO] Cleaning up store...');
+        await api(`${state.storeName}?force=true`, { method: 'DELETE' });
       }
-    }
+    } else {
+      // Upload operations
+      await testUploadOperations();
 
-    // Chunk management + cleanup
-    if (state.corpusName) {
-      await testChunkManagement();
-      await testDeleteOperations();
+      if (TEST_SCOPE !== 'upload-only') {
+        // Search operations
+        await testSearchOperations();
+      }
+
+      // Document management + cleanup
+      await testDocumentManagement();
     }
   } catch (err) {
-    console.error(`\nUnexpected error: ${err.message}`);
-    console.error(err.stack);
+    console.error(`\n[FATAL] ${err.message}`);
+    results.failed++;
 
-    // Emergency cleanup
-    if (state.corpusName) {
-      console.log('\nEmergency cleanup...');
+    // Try cleanup
+    if (state.storeName) {
+      console.log('\n  [INFO] Attempting cleanup...');
       try {
-        await api(`${state.corpusName}?force=true`, { method: 'DELETE' });
-        console.log('  Cleaned up test corpus');
+        await api(`${state.storeName}?force=true`, { method: 'DELETE' });
+        console.log(`  [INFO] Cleanup done: ${state.storeName}`);
       } catch {
-        console.error(`  Failed to cleanup: ${state.corpusName}`);
+        console.log('  [WARN] Cleanup failed');
       }
     }
   }
 
-  // ============================================
-  // Results Summary
-  // ============================================
-  const duration = ((Date.now() - results.startTime) / 1000).toFixed(1);
-
-  console.log('\n' + '='.repeat(50));
-  console.log('Results Summary');
-  console.log('-'.repeat(50));
-  console.log(`  Total:   ${results.total}`);
-  console.log(`  Passed:  ${results.passed}`);
-  console.log(`  Failed:  ${results.failed}`);
-  console.log(`  Skipped: ${results.skipped}`);
-  console.log(`  Chunks:  ${state.totalChunks} uploaded`);
-  console.log(`  Time:    ${duration}s`);
-  console.log('='.repeat(50));
-
-  // Save results for GitHub Actions artifact
-  const fs = await import('fs');
-  fs.writeFileSync('test-results.json', JSON.stringify({
-    ...results,
-    duration: parseFloat(duration),
-    scope: TEST_SCOPE,
-    chunksUploaded: state.totalChunks,
-    timestamp: new Date().toISOString(),
-  }, null, 2));
+  // Summary
+  console.log('\n' + '='.repeat(60));
+  console.log(`Results: ${results.passed} passed, ${results.failed} failed`);
+  console.log('='.repeat(60));
 
   if (results.failed > 0) {
     console.log('\nSome tests failed!');
