@@ -289,6 +289,58 @@ async function handleToolCall(
         break;
       }
 
+      // ========== Files API Operations ==========
+      case 'gemini_upload_file':
+        result = await client.uploadFile(
+          args.file_content,
+          args.display_name,
+          args.mime_type || 'text/plain'
+        );
+        break;
+
+      case 'gemini_list_files':
+        result = await client.listFiles(args.page_size || 100, args.page_token);
+        break;
+
+      case 'gemini_get_file':
+        result = await client.getFile(args.file_id);
+        break;
+
+      case 'gemini_delete_file':
+        await client.deleteFile(args.file_id);
+        result = { success: true, message: `File ${args.file_id} deleted successfully` };
+        break;
+
+      // ========== File Search Store Operations ==========
+      case 'gemini_create_file_search_store':
+        result = await client.createFileSearchStore(args.display_name);
+        break;
+
+      case 'gemini_get_file_search_store':
+        result = await client.getFileSearchStore(args.store_id);
+        break;
+
+      case 'gemini_list_file_search_stores':
+        result = await client.listFileSearchStores(args.page_size || 100, args.page_token);
+        break;
+
+      case 'gemini_delete_file_search_store':
+        await client.deleteFileSearchStore(args.store_id, args.force || false);
+        result = { success: true, message: `File Search Store ${args.store_id} deleted successfully` };
+        break;
+
+      case 'gemini_upload_to_file_search_store':
+        result = await client.uploadToFileSearchStore(
+          args.store_id,
+          args.file_content,
+          args.mime_type || 'text/plain'
+        );
+        break;
+
+      case 'gemini_import_to_file_search_store':
+        result = await client.importToFileSearchStore(args.store_id, args.file_id);
+        break;
+
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }

@@ -1,7 +1,7 @@
 /**
  * Tests for tools.ts
  * - Tool definitions structure validation
- * - All 16 tools present
+ * - All 26 tools present
  * - inputSchema validation
  */
 
@@ -9,8 +9,8 @@ import { describe, it, expect } from 'vitest';
 import { TOOLS } from '../src/tools';
 
 describe('MCP Tool Definitions', () => {
-  it('should have exactly 16 tools', () => {
-    expect(TOOLS).toHaveLength(16);
+  it('should have exactly 26 tools', () => {
+    expect(TOOLS).toHaveLength(26);
   });
 
   it('should have unique tool names', () => {
@@ -221,6 +221,16 @@ describe('MCP Tool Definitions', () => {
       'gemini_delete_chunk',
       'gemini_search_store',
       'gemini_ai_agent',
+      'gemini_upload_file',
+      'gemini_list_files',
+      'gemini_get_file',
+      'gemini_delete_file',
+      'gemini_create_file_search_store',
+      'gemini_get_file_search_store',
+      'gemini_list_file_search_stores',
+      'gemini_delete_file_search_store',
+      'gemini_upload_to_file_search_store',
+      'gemini_import_to_file_search_store',
     ];
 
     it('should have all expected tools', () => {

@@ -28,7 +28,7 @@ describe('Worker Entry Point', () => {
       expect(body.name).toBe('gemini-rag-file-search-mcp');
       expect(body.version).toBe('1.0.0');
       expect(body.status).toBe('ok');
-      expect(body.tools).toBe(16);
+      expect(body.tools).toBe(26);
       expect(body.endpoints.mcp).toBe('/mcp');
       expect(body.endpoints.api).toBe('/api/*');
     });

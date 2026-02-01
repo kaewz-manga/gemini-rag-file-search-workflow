@@ -17,6 +17,16 @@
  * 12. deleteChunk        - Delete a chunk
  * 13. queryCorpus        - Search a store (semantic search)
  * 14. generateAnswer     - AI Agent (search + generate answer with grounding)
+ * 15. uploadFile         - Upload a file to Gemini Files API
+ * 16. listFiles          - List uploaded files
+ * 17. getFile            - Get file details
+ * 18. deleteFile         - Delete a file
+ * 19. createFileSearchStore    - Create a File Search Store
+ * 20. getFileSearchStore      - Get File Search Store details
+ * 21. listFileSearchStores    - List File Search Stores
+ * 22. deleteFileSearchStore   - Delete a File Search Store
+ * 23. uploadToFileSearchStore - Upload file directly to a File Search Store
+ * 24. importToFileSearchStore - Import an existing file into a File Search Store
  */
 
 import {
@@ -38,6 +48,12 @@ import {
   QueryCorpusResponse,
   MetadataFilter,
   GenerateContentResponse,
+  FileMetadata,
+  UploadFileResponse,
+  ListFilesResponse,
+  FileSearchStore,
+  ListFileSearchStoresResponse,
+  ImportFileToStoreResponse,
 } from './types';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com';
@@ -466,6 +482,168 @@ export class GeminiClient {
     }
 
     return this.uploadTextToCorpus(corpusId, documentName, textContent, options);
+  }
+
+  // ============================================
+  // 7. Files API Operations
+  // ============================================
+
+  /**
+   * Upload a file to Gemini Files API (simple upload)
+   * Files expire after 48 hours
+   */
+  async uploadFile(
+    fileContent: string,
+    displayName: string,
+    mimeType: string = 'text/plain'
+  ): Promise<UploadFileResponse> {
+    const separator = '?';
+    const url = `${this.baseUrl}/upload/${API_VERSION}/files${separator}key=${this.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': mimeType,
+        'X-Goog-Upload-Protocol': 'raw',
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+      },
+      body: fileContent,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage: string;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error?.message || errorText;
+      } catch {
+        errorMessage = errorText;
+      }
+      throw new Error(`Gemini API Error (${response.status}): ${errorMessage}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * List uploaded files
+   */
+  async listFiles(pageSize: number = 100, pageToken?: string): Promise<ListFilesResponse> {
+    let endpoint = `files?pageSize=${pageSize}`;
+    if (pageToken) {
+      endpoint += `&pageToken=${pageToken}`;
+    }
+    return this.request<ListFilesResponse>(endpoint, { method: 'GET' });
+  }
+
+  /**
+   * Get file details
+   */
+  async getFile(fileId: string): Promise<FileMetadata> {
+    const fileName = fileId.startsWith('files/') ? fileId : `files/${fileId}`;
+    return this.request<FileMetadata>(fileName, { method: 'GET' });
+  }
+
+  /**
+   * Delete a file
+   */
+  async deleteFile(fileId: string): Promise<void> {
+    const fileName = fileId.startsWith('files/') ? fileId : `files/${fileId}`;
+    await this.request<void>(fileName, { method: 'DELETE' });
+  }
+
+  // ============================================
+  // 8. File Search Store Operations
+  // ============================================
+
+  /**
+   * Create a new File Search Store
+   */
+  async createFileSearchStore(displayName: string): Promise<FileSearchStore> {
+    return this.request<FileSearchStore>('fileSearchStores', {
+      method: 'POST',
+      body: JSON.stringify({ displayName }),
+    });
+  }
+
+  /**
+   * Get File Search Store details
+   */
+  async getFileSearchStore(storeId: string): Promise<FileSearchStore> {
+    const storeName = storeId.startsWith('fileSearchStores/') ? storeId : `fileSearchStores/${storeId}`;
+    return this.request<FileSearchStore>(storeName, { method: 'GET' });
+  }
+
+  /**
+   * List File Search Stores
+   */
+  async listFileSearchStores(pageSize: number = 100, pageToken?: string): Promise<ListFileSearchStoresResponse> {
+    let endpoint = `fileSearchStores?pageSize=${pageSize}`;
+    if (pageToken) {
+      endpoint += `&pageToken=${pageToken}`;
+    }
+    return this.request<ListFileSearchStoresResponse>(endpoint, { method: 'GET' });
+  }
+
+  /**
+   * Delete a File Search Store
+   */
+  async deleteFileSearchStore(storeId: string, force: boolean = false): Promise<void> {
+    const storeName = storeId.startsWith('fileSearchStores/') ? storeId : `fileSearchStores/${storeId}`;
+    await this.request<void>(`${storeName}?force=${force}`, { method: 'DELETE' });
+  }
+
+  /**
+   * Upload a file directly to a File Search Store
+   * The file will be automatically chunked and indexed
+   */
+  async uploadToFileSearchStore(
+    storeId: string,
+    fileContent: string,
+    mimeType: string = 'text/plain'
+  ): Promise<any> {
+    const storeName = storeId.startsWith('fileSearchStores/') ? storeId : `fileSearchStores/${storeId}`;
+    const url = `${this.baseUrl}/upload/${API_VERSION}/${storeName}:uploadToFileSearchStore?key=${this.apiKey}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': mimeType,
+        'X-Goog-Upload-Protocol': 'raw',
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+      },
+      body: fileContent,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage: string;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error?.message || errorText;
+      } catch {
+        errorMessage = errorText;
+      }
+      throw new Error(`Gemini API Error (${response.status}): ${errorMessage}`);
+    }
+
+    const text = await response.text();
+    if (!text) return {};
+    return JSON.parse(text);
+  }
+
+  /**
+   * Import an already-uploaded file into a File Search Store
+   * Returns a long-running operation
+   */
+  async importToFileSearchStore(storeId: string, fileId: string): Promise<ImportFileToStoreResponse> {
+    const storeName = storeId.startsWith('fileSearchStores/') ? storeId : `fileSearchStores/${storeId}`;
+    const fileName = fileId.startsWith('files/') ? fileId : `files/${fileId}`;
+
+    return this.request<ImportFileToStoreResponse>(`${storeName}:importFile`, {
+      method: 'POST',
+      body: JSON.stringify({ name: fileName }),
+    });
   }
 
   // ============================================

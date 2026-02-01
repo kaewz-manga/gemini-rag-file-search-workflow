@@ -231,6 +231,39 @@ export interface ListFilesResponse {
 }
 
 // ============================================
+// File Search Store Types
+// ============================================
+
+export interface FileSearchStore {
+  name: string; // Format: fileSearchStores/{store_id}
+  displayName: string;
+  createTime: string;
+  updateTime: string;
+  state?: string;
+}
+
+export interface CreateFileSearchStoreRequest {
+  displayName: string;
+}
+
+export interface ListFileSearchStoresResponse {
+  fileSearchStores: FileSearchStore[];
+  nextPageToken?: string;
+}
+
+export interface ImportFileToStoreRequest {
+  name: string; // Format: files/{file_id}
+}
+
+export interface ImportFileToStoreResponse {
+  name: string; // Long-running operation name
+  metadata?: any;
+  done?: boolean;
+  response?: any;
+  error?: any;
+}
+
+// ============================================
 // MCP Response Type
 // ============================================
 

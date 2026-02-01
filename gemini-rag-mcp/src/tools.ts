@@ -28,7 +28,21 @@
  * 15. gemini_search_store       - Semantic search in a store
  * 16. gemini_ai_agent           - AI Agent (RAG search + generate answer)
  *
- * Total: 16 tools
+ * ========== Files API Operations (4) ==========
+ * 17. gemini_upload_file        - Upload a file to Gemini Files API
+ * 18. gemini_list_files         - List uploaded files
+ * 19. gemini_get_file           - Get file details
+ * 20. gemini_delete_file        - Delete a file
+ *
+ * ========== File Search Store Operations (6) ==========
+ * 21. gemini_create_file_search_store    - Create a File Search Store
+ * 22. gemini_get_file_search_store       - Get File Search Store details
+ * 23. gemini_list_file_search_stores     - List File Search Stores
+ * 24. gemini_delete_file_search_store    - Delete a File Search Store
+ * 25. gemini_upload_to_file_search_store - Upload file to a File Search Store
+ * 26. gemini_import_to_file_search_store - Import file into a File Search Store
+ *
+ * Total: 26 tools
  */
 
 export const TOOLS = [
@@ -507,6 +521,190 @@ export const TOOLS = [
         },
       },
       required: ['corpus_id', 'query'],
+    },
+  },
+
+  // ========== Files API Operations (4) ==========
+  {
+    name: 'gemini_upload_file',
+    description:
+      'อัปโหลดไฟล์ไปยัง Gemini Files API ไฟล์จะหมดอายุใน 48 ชั่วโมง รองรับ text, JSON, CSV และไฟล์ข้อความอื่นๆ ใช้คู่กับ import_to_file_search_store เพื่อนำไฟล์เข้า File Search Store | Upload a file to Gemini Files API. Files expire after 48 hours. Supports text, JSON, CSV. Use with import_to_file_search_store to add files to a File Search Store.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_content: {
+          type: 'string',
+          description: 'เนื้อหาไฟล์ (text content) | File content as text',
+        },
+        display_name: {
+          type: 'string',
+          description: 'ชื่อไฟล์ เช่น "report.txt", "data.json" | File display name',
+        },
+        mime_type: {
+          type: 'string',
+          description: 'MIME type เช่น "text/plain", "application/json", "text/csv" (ค่าเริ่มต้น: text/plain) | MIME type (default: text/plain)',
+        },
+      },
+      required: ['file_content', 'display_name'],
+    },
+  },
+  {
+    name: 'gemini_list_files',
+    description:
+      'แสดงรายการไฟล์ทั้งหมดที่อัปโหลดไว้ใน Gemini Files API คืนค่า file ID, ชื่อ, MIME type, ขนาด, สถานะ, เวลาหมดอายุ | List all uploaded files in Gemini Files API. Returns file ID, name, MIME type, size, state, and expiration time.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page_size: {
+          type: 'number',
+          description: 'จำนวนรายการต่อหน้า (ค่าเริ่มต้น: 100, สูงสุด: 100) | Items per page (default: 100, max: 100)',
+        },
+        page_token: {
+          type: 'string',
+          description: 'Token สำหรับหน้าถัดไป | Token for next page',
+        },
+      },
+    },
+  },
+  {
+    name: 'gemini_get_file',
+    description:
+      'ดูรายละเอียดของไฟล์ที่อัปโหลด รวมถึงชื่อ, MIME type, ขนาด, สถานะ (PROCESSING/ACTIVE/FAILED), เวลาหมดอายุ | Get uploaded file details including name, MIME type, size, state, and expiration time.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_id: {
+          type: 'string',
+          description: 'File ID เช่น "abc123" หรือ "files/abc123" | File ID from upload_file or list_files',
+        },
+      },
+      required: ['file_id'],
+    },
+  },
+  {
+    name: 'gemini_delete_file',
+    description:
+      'ลบไฟล์ที่อัปโหลดไว้ใน Gemini Files API การลบจะถาวรไม่สามารถกู้คืนได้ | Delete an uploaded file from Gemini Files API permanently.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file_id: {
+          type: 'string',
+          description: 'File ID ที่ต้องการลบ | File ID to delete',
+        },
+      },
+      required: ['file_id'],
+    },
+  },
+
+  // ========== File Search Store Operations (6) ==========
+  {
+    name: 'gemini_create_file_search_store',
+    description:
+      'สร้าง File Search Store ใหม่ เป็นระบบ RAG แบบ managed ที่จัดการ chunking, embedding และ search อัตโนมัติ เหมาะสำหรับอัปโหลดไฟล์และค้นหาโดยไม่ต้องจัดการ chunks เอง | Create a new File Search Store. Fully managed RAG system that handles chunking, embedding, and search automatically.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        display_name: {
+          type: 'string',
+          description: 'ชื่อ File Search Store เช่น "เอกสารโปรเจค", "คู่มือผลิตภัณฑ์" | Display name for the File Search Store',
+        },
+      },
+      required: ['display_name'],
+    },
+  },
+  {
+    name: 'gemini_get_file_search_store',
+    description:
+      'ดูรายละเอียดของ File Search Store รวมถึงชื่อ, สถานะ, เวลาสร้าง | Get File Search Store details including name, state, and creation time.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        store_id: {
+          type: 'string',
+          description: 'File Search Store ID เช่น "abc123" หรือ "fileSearchStores/abc123" | Store ID from create or list',
+        },
+      },
+      required: ['store_id'],
+    },
+  },
+  {
+    name: 'gemini_list_file_search_stores',
+    description:
+      'แสดงรายการ File Search Store ทั้งหมด คืนค่า store ID, ชื่อ, สถานะ, เวลาสร้าง | List all File Search Stores. Returns store ID, name, state, and timestamps.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page_size: {
+          type: 'number',
+          description: 'จำนวนรายการต่อหน้า (ค่าเริ่มต้น: 100) | Items per page (default: 100)',
+        },
+        page_token: {
+          type: 'string',
+          description: 'Token สำหรับหน้าถัดไป | Token for next page',
+        },
+      },
+    },
+  },
+  {
+    name: 'gemini_delete_file_search_store',
+    description:
+      'ลบ File Search Store และเอกสารทั้งหมดในนั้น การลบจะถาวรไม่สามารถกู้คืนได้ ใช้ force=true เพื่อลบ Store ที่มีเอกสารอยู่ | Delete a File Search Store permanently. Use force=true to cascade delete all documents.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        store_id: {
+          type: 'string',
+          description: 'File Search Store ID ที่ต้องการลบ | Store ID to delete',
+        },
+        force: {
+          type: 'boolean',
+          description: 'ลบแม้มีเอกสารอยู่ (ค่าเริ่มต้น: false) | Force delete with documents (default: false)',
+        },
+      },
+      required: ['store_id'],
+    },
+  },
+  {
+    name: 'gemini_upload_to_file_search_store',
+    description:
+      'อัปโหลดไฟล์โดยตรงเข้า File Search Store ระบบจะจัดการ chunking และ indexing อัตโนมัติ รองรับ text, JSON, CSV | Upload a file directly to a File Search Store. Automatically handles chunking and indexing. Supports text, JSON, CSV.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        store_id: {
+          type: 'string',
+          description: 'File Search Store ID | Store ID to upload to',
+        },
+        file_content: {
+          type: 'string',
+          description: 'เนื้อหาไฟล์ (text content) | File content as text',
+        },
+        mime_type: {
+          type: 'string',
+          description: 'MIME type เช่น "text/plain", "application/json" (ค่าเริ่มต้น: text/plain) | MIME type (default: text/plain)',
+        },
+      },
+      required: ['store_id', 'file_content'],
+    },
+  },
+  {
+    name: 'gemini_import_to_file_search_store',
+    description:
+      'นำเข้าไฟล์ที่อัปโหลดไว้แล้ว (จาก Files API) เข้า File Search Store ใช้คู่กับ upload_file เพื่ออัปโหลดไฟล์ก่อน แล้วนำเข้า Store คืนค่า operation สำหรับติดตามสถานะ | Import an already-uploaded file (from Files API) into a File Search Store. Use with upload_file first. Returns a long-running operation.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        store_id: {
+          type: 'string',
+          description: 'File Search Store ID | Store ID to import into',
+        },
+        file_id: {
+          type: 'string',
+          description: 'File ID จาก upload_file เช่น "abc123" หรือ "files/abc123" | File ID from upload_file',
+        },
+      },
+      required: ['store_id', 'file_id'],
     },
   },
 ];
