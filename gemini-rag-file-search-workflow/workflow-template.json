@@ -1,0 +1,24 @@
+{
+  "id": "WORKFLOW_ID_PLACEHOLDER",
+  "name": "Gemini RAG File Search MCP - Webhook",
+  "active": false,
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "timezone": "{{TIMEZONE}}"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "configurationNote": "Replace {{PLACEHOLDER}} values with your configuration. See .env.example for reference.",
+    "readme": "\nIMPORTANT: This is a template workflow file.\n\nTo use this workflow:\n1. Download your actual workflow from n8n\n2. Run: python3 sanitize_workflow.py workflow-original.json workflow.json\n3. Review the sanitized file\n4. Commit to GitHub\n\nThe actual workflow has 60+ nodes and is too large to include directly.\nPlease export from your n8n instance and use the sanitize script.\n\nKey placeholders to replace:\n- {{N8N_BASE_URL}}\n- {{MCP_ENDPOINT_URL}}\n- {{GOOGLE_DRIVE_FOLDER_ID}}\n- {{DATA_TABLE_MAIN_ID}}\n- {{DATA_TABLE_DOCUMENT_ID}}\n- {{WEBHOOK_ID}}\n- {{TIMEZONE}}\n"
+  },
+  "tags": []
+}

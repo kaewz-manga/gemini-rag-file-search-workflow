@@ -1,0 +1,12 @@
+{
+  "id": "tklcM0u7BZNnNcgS",
+  "name": "Gemini RAG File Search MCP - Webhook",
+  "active": true,
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Bangkok",
+    "availableInMCP": true
+  }
+}
