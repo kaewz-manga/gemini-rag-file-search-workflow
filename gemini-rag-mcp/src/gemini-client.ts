@@ -188,6 +188,7 @@ export class GeminiClient {
       method: 'POST',
       headers: {
         'Content-Type': `multipart/related; boundary=${boundary}`,
+        'X-Goog-Upload-Protocol': 'multipart',
       },
       body,
     });
@@ -317,7 +318,7 @@ export class GeminiClient {
     const storeName = storeId.startsWith('fileSearchStores/')
       ? storeId
       : `fileSearchStores/${storeId}`;
-    const model = options.model || 'gemini-2.0-flash';
+    const model = options.model || 'gemini-2.5-flash';
 
     const file_search: any = {
       file_search_store_names: [storeName],
