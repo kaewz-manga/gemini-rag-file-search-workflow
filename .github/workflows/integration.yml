@@ -12,6 +12,7 @@ on:
         options:
           - all
           - store-only
+          - upload-only
           - search-only
 
   # หรือ trigger จาก push ที่ main (optional - uncomment ถ้าต้องการ)
