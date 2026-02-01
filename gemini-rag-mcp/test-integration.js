@@ -86,16 +86,51 @@ async function api(endpoint, options = {}) {
   return { ok: response.ok, status: response.status, data };
 }
 
-async function uploadApi(endpoint, body, contentType) {
-  const url = `https://generativelanguage.googleapis.com/upload/v1beta/${endpoint}?key=${API_KEY}`;
+/**
+ * Upload file using resumable upload protocol (2-step).
+ * Step 1: Initiate upload → get upload URL
+ * Step 2: Send file bytes → get file metadata
+ */
+async function resumableUpload(fileContent, displayName, mimeType = 'text/plain') {
+  const contentBytes = Buffer.from(fileContent, 'utf-8');
 
-  const response = await fetch(url, {
+  // Step 1: Initiate resumable upload
+  const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
+  const initResponse = await fetch(initUrl, {
     method: 'POST',
-    headers: { 'Content-Type': contentType },
-    body,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': String(contentBytes.length),
+      'X-Goog-Upload-Header-Content-Type': mimeType,
+    },
+    body: JSON.stringify({ file: { display_name: displayName } }),
   });
 
-  const text = await response.text();
+  if (!initResponse.ok) {
+    const text = await initResponse.text();
+    console.log(`     [UPLOAD INIT ${initResponse.status}] ${text.substring(0, 500)}`);
+    return { ok: false, status: initResponse.status, data: { error: text } };
+  }
+
+  const uploadUrl = initResponse.headers.get('x-goog-upload-url');
+  if (!uploadUrl) {
+    return { ok: false, status: 500, data: { error: 'No upload URL returned' } };
+  }
+
+  // Step 2: Upload file bytes
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': String(contentBytes.length),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize',
+    },
+    body: contentBytes,
+  });
+
+  const text = await uploadResponse.text();
   let data = null;
   try {
     data = text ? JSON.parse(text) : {};
@@ -103,12 +138,11 @@ async function uploadApi(endpoint, body, contentType) {
     data = { raw: text };
   }
 
-  if (!response.ok) {
-    console.log(`     [UPLOAD ${response.status}] ${endpoint}`);
-    if (text) console.log(`     [Response] ${text.substring(0, 500)}`);
+  if (!uploadResponse.ok) {
+    console.log(`     [UPLOAD ${uploadResponse.status}] ${text.substring(0, 500)}`);
   }
 
-  return { ok: response.ok, status: response.status, data };
+  return { ok: uploadResponse.ok, status: uploadResponse.status, data };
 }
 
 // ============================================
@@ -186,27 +220,12 @@ async function testUploadOperations() {
 - สินค้าที่เปิดใช้แล้ว คืนได้เฉพาะกรณีชำรุดเท่านั้น
 `.trim();
 
-  // Step 1: Upload to Files API
+  // Step 1: Upload to Files API (resumable upload)
   await test('Upload text to Files API', async () => {
-    const boundary = '---BOUNDARY---';
-    const metadata = JSON.stringify({ file: { displayName: 'SmartHome Hub Pro Manual' } });
-
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      metadata,
-      `--${boundary}`,
-      'Content-Type: text/plain',
-      '',
+    const { ok, data } = await resumableUpload(
       sampleText,
-      `--${boundary}--`,
-    ].join('\r\n');
-
-    const { ok, data } = await uploadApi(
-      'files',
-      body,
-      `multipart/related; boundary=${boundary}`
+      'SmartHome Hub Pro Manual',
+      'text/plain'
     );
     assert(ok, `Failed: ${JSON.stringify(data)}`);
     assert(data.file && data.file.name, 'No file name returned');
@@ -282,7 +301,7 @@ async function testSearchOperations() {
   console.log('-'.repeat(50));
 
   await test('Search: Installation question (Thai)', async () => {
-    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
+    const { ok, data } = await api('models/gemini-2.5-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
         contents: [{
@@ -309,7 +328,7 @@ async function testSearchOperations() {
   });
 
   await test('Search: Return policy question', async () => {
-    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
+    const { ok, data } = await api('models/gemini-2.5-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
         contents: [{
@@ -330,7 +349,7 @@ async function testSearchOperations() {
   });
 
   await test('Search: English query on Thai docs', async () => {
-    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
+    const { ok, data } = await api('models/gemini-2.5-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
         contents: [{
@@ -351,7 +370,7 @@ async function testSearchOperations() {
   });
 
   await test('Search: WiFi troubleshooting', async () => {
-    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
+    const { ok, data } = await api('models/gemini-2.5-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
         contents: [{
@@ -372,7 +391,7 @@ async function testSearchOperations() {
   });
 
   await test('Search: With topK parameter', async () => {
-    const { ok, data } = await api('models/gemini-2.0-flash:generateContent', {
+    const { ok, data } = await api('models/gemini-2.5-flash:generateContent', {
       method: 'POST',
       body: JSON.stringify({
         contents: [{

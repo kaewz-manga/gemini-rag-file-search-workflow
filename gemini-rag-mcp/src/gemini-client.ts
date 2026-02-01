@@ -160,41 +160,32 @@ export class GeminiClient {
   }
 
   /**
-   * Upload a file to the Files API (for later import into a store)
+   * Upload a file to the Files API using resumable upload protocol.
+   * Two-step process: initiate upload → send file bytes.
    */
   async uploadFileToFilesApi(
     fileContent: string,
     displayName: string,
     mimeType: string = 'text/plain'
   ): Promise<FileMetadata> {
-    const boundary = '---BOUNDARY---';
-    const metadata = { file: { displayName } };
+    const contentBytes = new TextEncoder().encode(fileContent);
 
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      JSON.stringify(metadata),
-      `--${boundary}`,
-      `Content-Type: ${mimeType}`,
-      '',
-      fileContent,
-      `--${boundary}--`,
-    ].join('\r\n');
-
-    const url = `${this.baseUrl}/upload/${API_VERSION}/files?key=${this.apiKey}`;
-
-    const response = await fetch(url, {
+    // Step 1: Initiate resumable upload
+    const initUrl = `${this.baseUrl}/upload/${API_VERSION}/files?key=${this.apiKey}`;
+    const initResponse = await fetch(initUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-        'X-Goog-Upload-Protocol': 'multipart',
+        'Content-Type': 'application/json',
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Length': String(contentBytes.length),
+        'X-Goog-Upload-Header-Content-Type': mimeType,
       },
-      body,
+      body: JSON.stringify({ file: { display_name: displayName } }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (!initResponse.ok) {
+      const errorText = await initResponse.text();
       let errorMessage: string;
       try {
         const errorJson = JSON.parse(errorText);
@@ -202,10 +193,38 @@ export class GeminiClient {
       } catch {
         errorMessage = errorText;
       }
-      throw new Error(`Gemini API Error (${response.status}): ${errorMessage}`);
+      throw new Error(`Gemini Files API init error (${initResponse.status}): ${errorMessage}`);
     }
 
-    const result = await response.json() as any;
+    const uploadUrl = initResponse.headers.get('x-goog-upload-url');
+    if (!uploadUrl) {
+      throw new Error('No upload URL returned from Files API init');
+    }
+
+    // Step 2: Upload file bytes
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Length': String(contentBytes.length),
+        'X-Goog-Upload-Offset': '0',
+        'X-Goog-Upload-Command': 'upload, finalize',
+      },
+      body: contentBytes,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      let errorMessage: string;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error?.message || errorText;
+      } catch {
+        errorMessage = errorText;
+      }
+      throw new Error(`Gemini Files API upload error (${uploadResponse.status}): ${errorMessage}`);
+    }
+
+    const result = await uploadResponse.json() as any;
     return result.file;
   }
 

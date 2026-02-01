@@ -110,41 +110,63 @@ describe('GeminiClient', () => {
   // ========== Upload Operations ==========
   describe('Upload Operations', () => {
     it('uploadTextToStore should upload to Files API then import to store', async () => {
-      // Step 1: Files API upload
+      // Step 1: Initiate resumable upload (returns upload URL in headers)
+      mockFetch.mockResolvedValueOnce({
+        ok: true, status: 200,
+        headers: new Map([['x-goog-upload-url', 'https://upload.example.com/upload/123']]),
+        text: async () => '{}',
+      });
+      // Step 2: Upload file bytes
       mockFetch.mockResolvedValueOnce(mockResponse({
         file: { name: 'files/abc', displayName: 'Test Doc' },
       }));
-      // Step 2: Import to store
+      // Step 3: Import to store
       mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
-      // Step 3: Poll - done
+      // Step 4: Poll - done
       mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: true }));
 
       const result = await client.uploadTextToStore('test-store', 'Hello world', {
         displayName: 'Test Doc',
       });
 
-      expect(mockFetch).toHaveBeenCalledTimes(3);
-      // First call: Files API upload
-      const [url1] = mockFetch.mock.calls[0];
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // First call: initiate resumable upload
+      const [url1, opts1] = mockFetch.mock.calls[0];
       expect(url1).toContain('/upload/v1beta/files');
-      // Second call: importFile
-      const [url2] = mockFetch.mock.calls[1];
-      expect(url2).toContain('/v1beta/fileSearchStores/test-store:importFile');
+      expect(opts1.headers['X-Goog-Upload-Protocol']).toBe('resumable');
+      expect(opts1.headers['X-Goog-Upload-Command']).toBe('start');
+      // Second call: upload bytes
+      const [url2, opts2] = mockFetch.mock.calls[1];
+      expect(url2).toBe('https://upload.example.com/upload/123');
+      expect(opts2.headers['X-Goog-Upload-Command']).toBe('upload, finalize');
+      // Third call: importFile
+      const [url3] = mockFetch.mock.calls[2];
+      expect(url3).toContain('/v1beta/fileSearchStores/test-store:importFile');
       expect(result.file.name).toBe('files/abc');
       expect(result.operation.done).toBe(true);
     });
 
-    it('uploadFileToFilesApi should POST multipart to files endpoint', async () => {
+    it('uploadFileToFilesApi should use resumable upload protocol', async () => {
+      // Step 1: Initiate
+      mockFetch.mockResolvedValueOnce({
+        ok: true, status: 200,
+        headers: new Map([['x-goog-upload-url', 'https://upload.example.com/upload/456']]),
+        text: async () => '{}',
+      });
+      // Step 2: Upload bytes
       mockFetch.mockResolvedValueOnce(mockResponse({
         file: { name: 'files/abc', displayName: 'test.txt' },
       }));
 
       const result = await client.uploadFileToFilesApi('content here', 'test.txt');
 
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/upload/v1beta/files');
-      expect(options.method).toBe('POST');
-      expect(options.body).toContain('content here');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const [url1, opts1] = mockFetch.mock.calls[0];
+      expect(url1).toContain('/upload/v1beta/files');
+      expect(opts1.method).toBe('POST');
+      expect(opts1.headers['X-Goog-Upload-Protocol']).toBe('resumable');
+      const [url2] = mockFetch.mock.calls[1];
+      expect(url2).toBe('https://upload.example.com/upload/456');
       expect(result.name).toBe('files/abc');
     });
 
@@ -268,7 +290,7 @@ describe('GeminiClient', () => {
       await client.searchStore('s1', 'test');
 
       const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/v1beta/models/gemini-2.0-flash:generateContent');
+      expect(url).toContain('/v1beta/models/gemini-2.5-flash:generateContent');
     });
 
     it('searchStore should include topK and metadataFilter', async () => {
@@ -297,13 +319,19 @@ describe('GeminiClient', () => {
   // ========== Convenience Methods ==========
   describe('Convenience Methods', () => {
     it('uploadTextAndWait should upload to Files API then import', async () => {
-      // Files API upload
+      // Step 1: Initiate resumable upload
+      mockFetch.mockResolvedValueOnce({
+        ok: true, status: 200,
+        headers: new Map([['x-goog-upload-url', 'https://upload.example.com/upload/789']]),
+        text: async () => '{}',
+      });
+      // Step 2: Upload bytes
       mockFetch.mockResolvedValueOnce(mockResponse({
         file: { name: 'files/abc', displayName: 'My Doc' },
       }));
-      // Import
+      // Step 3: Import
       mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
-      // Poll - done
+      // Step 4: Poll - done
       mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: true }));
 
       const result = await client.uploadTextAndWait('s1', 'text content', {
@@ -312,7 +340,7 @@ describe('GeminiClient', () => {
 
       expect(result.operation.done).toBe(true);
       expect(result.file.name).toBe('files/abc');
-      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(mockFetch).toHaveBeenCalledTimes(4);
     });
 
     it('importFromUrl should fetch URL then upload then import', async () => {
@@ -322,7 +350,13 @@ describe('GeminiClient', () => {
         status: 200,
         text: async () => 'Content from URL.',
       });
-      // Upload to Files API
+      // Initiate resumable upload
+      mockFetch.mockResolvedValueOnce({
+        ok: true, status: 200,
+        headers: new Map([['x-goog-upload-url', 'https://upload.example.com/upload/url']]),
+        text: async () => '{}',
+      });
+      // Upload bytes
       mockFetch.mockResolvedValueOnce(mockResponse({
         file: { name: 'files/abc', displayName: 'url-doc' },
       }));
@@ -335,7 +369,7 @@ describe('GeminiClient', () => {
 
       expect(result.file.name).toBe('files/abc');
       expect(result.operation.done).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      expect(mockFetch).toHaveBeenCalledTimes(5);
     });
 
     it('importFromUrl should throw on failed URL fetch', async () => {

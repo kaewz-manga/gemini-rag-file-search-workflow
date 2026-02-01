@@ -173,7 +173,7 @@ async function handleToolCall(
 
         result = {
           answer,
-          model: args.model || 'gemini-2.0-flash',
+          model: args.model || 'gemini-2.5-flash',
           usage: searchResult.usageMetadata,
           grounding: grounding
             ? {
