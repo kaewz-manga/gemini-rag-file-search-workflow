@@ -1,0 +1,39 @@
+{
+  "name": "gemini-rag-file-search-mcp",
+  "version": "1.0.0",
+  "description": "Gemini RAG File Search MCP server for Cloudflare Workers",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --local --persist",
+    "dev:remote": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "wrangler d1 execute gemini-rag-mcp-db --file=./schema.sql",
+    "db:migrate:local": "wrangler d1 execute gemini-rag-mcp-db --local --file=./schema.sql"
+  },
+  "keywords": [
+    "gemini",
+    "rag",
+    "file-search",
+    "mcp",
+    "cloudflare-workers",
+    "model-context-protocol",
+    "semantic-retrieval"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.8",
+    "@cloudflare/workers-types": "^4.20250117.0",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.18",
+    "wrangler": "^4.60.0"
+  }
+}

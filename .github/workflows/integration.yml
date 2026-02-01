@@ -1,0 +1,62 @@
+name: Integration Tests (Real Gemini API)
+
+on:
+  # Manual trigger เท่านั้น (เพราะใช้ API จริง มี quota)
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Test scope to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - store-only
+          - upload-only
+          - search-only
+
+  # หรือ trigger จาก push ที่ main (optional - uncomment ถ้าต้องการ)
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'gemini-rag-mcp/src/**'
+
+jobs:
+  integration-test:
+    name: Integration Test (Gemini API)
+    runs-on: ubuntu-latest
+
+    # ========== ใช้ Repo Secrets ==========
+    # ไปที่ GitHub repo > Settings > Secrets and variables > Actions
+    # กด "New repository secret" แล้วเพิ่ม:
+    #   - GEMINI_API_KEY: API key จาก https://aistudio.google.com/apikey
+
+    defaults:
+      run:
+        working-directory: gemini-rag-mcp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: gemini-rag-mcp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run integration tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
+        run: node test-integration.js
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results
+          path: gemini-rag-mcp/test-results.json
+          retention-days: 30

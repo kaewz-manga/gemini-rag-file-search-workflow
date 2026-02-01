@@ -1,0 +1,64 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "gemini-rag-file-search-mcp"
+main = "src/index.ts"
+compatibility_date = "2025-01-26"
+workers_dev = true
+
+# Custom Domain (change to your domain)
+# routes = [
+#   { pattern = "gemini-rag-mcp.your-domain.com", custom_domain = true }
+# ]
+
+# Observability
+[observability]
+enabled = true
+
+# ============================================
+# D1 Database Binding
+# ============================================
+# Create database: wrangler d1 create gemini-rag-mcp-db
+# Apply schema: wrangler d1 execute gemini-rag-mcp-db --file=./schema.sql
+[[d1_databases]]
+binding = "DB"
+database_name = "gemini-rag-mcp-db"
+database_id = "YOUR_D1_DATABASE_ID"
+
+# ============================================
+# KV Namespace Binding (for rate limiting cache)
+# ============================================
+# Create KV: wrangler kv:namespace create "RATE_LIMIT_KV"
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+
+# ============================================
+# Environment Variables (Secrets)
+# ============================================
+# Set secrets using:
+# wrangler secret put JWT_SECRET
+# wrangler secret put ENCRYPTION_KEY
+# wrangler secret put GEMINI_API_KEY
+#
+# Generate secure secrets:
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+[vars]
+ENVIRONMENT = "production"
+
+# ============================================
+# Development Environment
+# ============================================
+[env.dev]
+name = "gemini-rag-mcp-dev"
+
+[env.dev.vars]
+ENVIRONMENT = "development"
+
+# ============================================
+# Staging Environment
+# ============================================
+[env.staging]
+name = "gemini-rag-mcp-staging"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"

@@ -1,0 +1,277 @@
+{
+  "examples": [
+    {
+      "name": "Create Store",
+      "description": "สร้าง file search store ใหม่",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Create Store",
+          "displayName": "My Knowledge Base"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "content": [
+            {
+              "text": [
+                {
+                  "displayName": "My Knowledge Base",
+                  "name": "corpora/abc123def456"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Upload Store with Custom Metadata",
+      "description": "อัพโหลดไฟล์พร้อม custom metadata",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "multipart/form-data"
+        },
+        "body": {
+          "operation": "Upload Store",
+          "displayName": "Technical Documentation",
+          "file_name": "api-guide.pdf",
+          "category": "documentation",
+          "project": "API v2",
+          "tags": "[\"API\", \"REST\", \"Documentation\"]",
+          "priority": 1
+        }
+      },
+      "notes": "ส่งไฟล์ในฟิลด์ 'image' (multipart form data)"
+    },
+    {
+      "name": "Import Store with Tags (Comma-separated)",
+      "description": "นำเข้าไฟล์จาก Google Drive พร้อม tags แบบ comma-separated",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Import Store",
+          "displayName": "Research Papers",
+          "file_name": "machine-learning-2024.pdf",
+          "category": "research",
+          "project": "ML Research",
+          "tags": "Machine Learning, Neural Networks, Deep Learning",
+          "priority": 2
+        }
+      }
+    },
+    {
+      "name": "Import Store with Tags (Newline-separated)",
+      "description": "นำเข้าไฟล์พร้อม tags แบบแยกบรรทัด",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Import Store",
+          "displayName": "Training Materials",
+          "file_name": "onboarding-guide.pdf",
+          "category": "training",
+          "project": "HR",
+          "tags": "Onboarding\nHR\nTraining\nNew Employees",
+          "priority": 3
+        }
+      }
+    },
+    {
+      "name": "Search Store",
+      "description": "ค้นหาข้อมูลใน store",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Search Store",
+          "file_search_store_name": "corpora/abc123def456",
+          "text_input": "What is RAG and how does it work?"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "content": [
+            {
+              "text": [
+                {
+                  "results": [
+                    {
+                      "documentName": "documents/xyz789",
+                      "relevanceScore": 0.92,
+                      "chunks": [
+                        {
+                          "text": "RAG (Retrieval Augmented Generation) is..."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "AI Agent Query",
+      "description": "ใช้ AI Agent ในการตอบคำถาม",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "AI Agent",
+          "text_input": "Explain the concept of retrieval augmented generation and provide examples"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "output": "Retrieval Augmented Generation (RAG) is an AI framework that combines..."
+        }
+      }
+    },
+    {
+      "name": "List All Stores",
+      "description": "แสดงรายการ stores ทั้งหมด",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "List Store"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "displayName": "My Knowledge Base",
+            "file_search_store_name": "corpora/abc123",
+            "activeDocumentsCount": 5,
+            "sizeBytes": 1048576
+          },
+          {
+            "displayName": "Technical Documentation",
+            "file_search_store_name": "corpora/def456",
+            "activeDocumentsCount": 12,
+            "sizeBytes": 5242880
+          }
+        ]
+      }
+    },
+    {
+      "name": "List Documents in Store",
+      "description": "แสดงรายการ documents ใน store",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "List Document",
+          "file_search_store_name": "corpora/abc123def456"
+        }
+      }
+    },
+    {
+      "name": "Get Store Details",
+      "description": "ดึงรายละเอียดของ store",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Get Store",
+          "file_search_store_name": "corpora/abc123def456"
+        }
+      }
+    },
+    {
+      "name": "Get Document Details",
+      "description": "ดึงรายละเอียดของ document",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Get Document",
+          "file_name": "api-guide.pdf"
+        }
+      }
+    },
+    {
+      "name": "Delete Document",
+      "description": "ลบ document จาก store",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Delete Document",
+          "file_name": "old-document.pdf"
+        }
+      }
+    },
+    {
+      "name": "Delete Store",
+      "description": "ลบ store ทั้งหมด",
+      "request": {
+        "method": "POST",
+        "url": "https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "Delete Store",
+          "displayName": "Temporary Store"
+        }
+      },
+      "warning": "การลบ store จะลบ documents ทั้งหมดในนั้นด้วย"
+    }
+  ],
+  "curl_examples": {
+    "create_store": "curl -X POST 'https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"operation\": \"Create Store\", \"displayName\": \"My Knowledge Base\"}'",
+    "upload_store": "curl -X POST 'https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search' \\\n  -F 'operation=Upload Store' \\\n  -F 'displayName=Tech Docs' \\\n  -F 'category=documentation' \\\n  -F 'tags=[\"API\",\"REST\"]' \\\n  -F 'image=@/path/to/file.pdf'",
+    "search": "curl -X POST 'https://{{N8N_BASE_URL}}/webhook/gemini-rag-file-search' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"operation\": \"Search Store\", \"file_search_store_name\": \"corpora/abc123\", \"text_input\": \"What is RAG?\"}'"
+  },
+  "notes": {
+    "tags_format": [
+      "JSON Array: '[\"tag1\", \"tag2\", \"tag3\"]'",
+      "Comma-separated: 'tag1, tag2, tag3'",
+      "Newline-separated: 'tag1\\ntag2\\ntag3'"
+    ],
+    "file_upload": "ใช้ multipart/form-data และส่งไฟล์ในฟิลด์ 'image'",
+    "operation_names": "ต้องตรงกับ Switch node conditions (case-sensitive)"
+  }
+}
