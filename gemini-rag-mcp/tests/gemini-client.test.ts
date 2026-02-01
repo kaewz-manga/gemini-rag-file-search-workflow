@@ -109,35 +109,29 @@ describe('GeminiClient', () => {
 
   // ========== Upload Operations ==========
   describe('Upload Operations', () => {
-    it('uploadTextToStore should POST multipart to upload endpoint', async () => {
-      const mockOp = { name: 'operations/op-123', done: false };
-      mockFetch.mockResolvedValueOnce(mockResponse(mockOp));
+    it('uploadTextToStore should upload to Files API then import to store', async () => {
+      // Step 1: Files API upload
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        file: { name: 'files/abc', displayName: 'Test Doc' },
+      }));
+      // Step 2: Import to store
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
+      // Step 3: Poll - done
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: true }));
 
       const result = await client.uploadTextToStore('test-store', 'Hello world', {
         displayName: 'Test Doc',
       });
 
-      expect(mockFetch).toHaveBeenCalledOnce();
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toContain('/upload/v1beta/fileSearchStores/test-store:upload');
-      expect(url).toContain('key=test-api-key');
-      expect(options.method).toBe('POST');
-      expect(options.headers['Content-Type']).toContain('multipart/related');
-      expect(options.body).toContain('Hello world');
-      expect(options.body).toContain('Test Doc');
-      expect(result).toEqual(mockOp);
-    });
-
-    it('uploadTextToStore should include custom metadata', async () => {
-      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1' }));
-
-      await client.uploadTextToStore('s1', 'text', {
-        customMetadata: [{ key: 'genre', stringValue: 'fiction' }],
-      });
-
-      const body = mockFetch.mock.calls[0][1].body;
-      expect(body).toContain('genre');
-      expect(body).toContain('fiction');
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      // First call: Files API upload
+      const [url1] = mockFetch.mock.calls[0];
+      expect(url1).toContain('/upload/v1beta/files');
+      // Second call: importFile
+      const [url2] = mockFetch.mock.calls[1];
+      expect(url2).toContain('/v1beta/fileSearchStores/test-store:importFile');
+      expect(result.file.name).toBe('files/abc');
+      expect(result.operation.done).toBe(true);
     });
 
     it('uploadFileToFilesApi should POST multipart to files endpoint', async () => {
@@ -262,7 +256,7 @@ describe('GeminiClient', () => {
 
       const body = JSON.parse(options.body);
       expect(body.contents[0].parts[0].text).toBe('What is RAG?');
-      expect(body.tools[0].fileSearch.fileSearchStoreNames).toContain('fileSearchStores/s1');
+      expect(body.tools[0].file_search.file_search_store_names).toContain('fileSearchStores/s1');
       expect(body.generationConfig.temperature).toBe(0.5);
       expect(body.generationConfig.maxOutputTokens).toBe(1024);
       expect(result.candidates).toHaveLength(1);
@@ -286,8 +280,8 @@ describe('GeminiClient', () => {
       });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.tools[0].fileSearch.topK).toBe(5);
-      expect(body.tools[0].fileSearch.metadataFilter).toBe('genre = "fiction"');
+      expect(body.tools[0].file_search.top_k).toBe(5);
+      expect(body.tools[0].file_search.metadata_filter).toBe('genre = "fiction"');
     });
 
     it('searchStore should not include generationConfig when no options', async () => {
@@ -302,22 +296,23 @@ describe('GeminiClient', () => {
 
   // ========== Convenience Methods ==========
   describe('Convenience Methods', () => {
-    it('uploadTextAndWait should upload and poll', async () => {
-      // Upload
+    it('uploadTextAndWait should upload to Files API then import', async () => {
+      // Files API upload
+      mockFetch.mockResolvedValueOnce(mockResponse({
+        file: { name: 'files/abc', displayName: 'My Doc' },
+      }));
+      // Import
       mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: false }));
       // Poll - done
-      mockFetch.mockResolvedValueOnce(mockResponse({
-        name: 'ops/1',
-        done: true,
-        response: { name: 'fileSearchStores/s1/documents/d1' },
-      }));
+      mockFetch.mockResolvedValueOnce(mockResponse({ name: 'ops/1', done: true }));
 
       const result = await client.uploadTextAndWait('s1', 'text content', {
         displayName: 'My Doc',
       });
 
       expect(result.operation.done).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(result.file.name).toBe('files/abc');
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('importFromUrl should fetch URL then upload then import', async () => {

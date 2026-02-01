@@ -126,8 +126,8 @@ export class GeminiClient {
   // ============================================
 
   /**
-   * Upload text content directly to a FileSearchStore.
-   * Uses the media upload endpoint with inline data.
+   * Upload text content to a FileSearchStore.
+   * Uses two-step process: upload to Files API → import into store.
    */
   async uploadTextToStore(
     storeId: string,
@@ -137,60 +137,26 @@ export class GeminiClient {
       mimeType?: string;
       customMetadata?: CustomMetadata[];
     } = {}
-  ): Promise<Operation> {
-    const storeName = storeId.startsWith('fileSearchStores/')
-      ? storeId
-      : `fileSearchStores/${storeId}`;
+  ): Promise<{ file: FileMetadata; operation: Operation }> {
+    const displayName = options.displayName || `upload-${Date.now()}`;
 
-    const mimeType = options.mimeType || 'text/plain';
-    const metadata: any = {};
-    if (options.displayName) {
-      metadata.displayName = options.displayName;
-    }
-    if (options.customMetadata) {
-      metadata.customMetadata = options.customMetadata;
-    }
-
-    // Use multipart upload: metadata JSON + file content
-    const boundary = '---BOUNDARY---';
-    const body = [
-      `--${boundary}`,
-      'Content-Type: application/json; charset=UTF-8',
-      '',
-      JSON.stringify(metadata),
-      `--${boundary}`,
-      `Content-Type: ${mimeType}`,
-      '',
+    // Step 1: Upload to Files API
+    const file = await this.uploadFileToFilesApi(
       textContent,
-      `--${boundary}--`,
-    ].join('\r\n');
+      displayName,
+      options.mimeType || 'text/plain'
+    );
 
-    const separator = '?';
-    const url = `${this.baseUrl}/upload/${API_VERSION}/${storeName}:upload${separator}key=${this.apiKey}`;
+    // Step 2: Import into FileSearchStore
+    const op = await this.importFileToStore(storeId, file.name, options.customMetadata);
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': `multipart/related; boundary=${boundary}`,
-      },
-      body,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage: string;
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.error?.message || errorText;
-      } catch {
-        errorMessage = errorText;
-      }
-      throw new Error(`Gemini API Error (${response.status}): ${errorMessage}`);
+    // Step 3: Poll until done
+    if (op.name) {
+      const completedOp = await this.pollOperation(op.name);
+      return { file, operation: completedOp };
     }
 
-    const text = await response.text();
-    if (!text) return {} as Operation;
-    return JSON.parse(text);
+    return { file, operation: op };
   }
 
   /**
@@ -353,14 +319,14 @@ export class GeminiClient {
       : `fileSearchStores/${storeId}`;
     const model = options.model || 'gemini-2.0-flash';
 
-    const fileSearch: any = {
-      fileSearchStoreNames: [storeName],
+    const file_search: any = {
+      file_search_store_names: [storeName],
     };
     if (options.topK) {
-      fileSearch.topK = options.topK;
+      file_search.top_k = options.topK;
     }
     if (options.metadataFilter) {
-      fileSearch.metadataFilter = options.metadataFilter;
+      file_search.metadata_filter = options.metadataFilter;
     }
 
     const body: any = {
@@ -370,7 +336,7 @@ export class GeminiClient {
           parts: [{ text: query }],
         },
       ],
-      tools: [{ fileSearch }],
+      tools: [{ file_search }],
     };
 
     if (options.temperature !== undefined || options.maxOutputTokens !== undefined) {
@@ -398,6 +364,7 @@ export class GeminiClient {
 
   /**
    * Upload text content to a store and wait for processing to complete.
+   * Alias for uploadTextToStore (which already polls).
    */
   async uploadTextAndWait(
     storeId: string,
@@ -406,21 +373,9 @@ export class GeminiClient {
       displayName?: string;
       mimeType?: string;
       customMetadata?: CustomMetadata[];
-      maxWaitMs?: number;
     } = {}
-  ): Promise<{ operation: Operation; document?: FileSearchDocument }> {
-    const op = await this.uploadTextToStore(storeId, textContent, {
-      displayName: options.displayName,
-      mimeType: options.mimeType,
-      customMetadata: options.customMetadata,
-    });
-
-    if (op.name) {
-      const completedOp = await this.pollOperation(op.name, options.maxWaitMs || 60000);
-      return { operation: completedOp, document: completedOp.response };
-    }
-
-    return { operation: op };
+  ): Promise<{ file: FileMetadata; operation: Operation }> {
+    return this.uploadTextToStore(storeId, textContent, options);
   }
 
   /**

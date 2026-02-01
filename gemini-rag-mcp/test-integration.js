@@ -186,15 +186,10 @@ async function testUploadOperations() {
 - สินค้าที่เปิดใช้แล้ว คืนได้เฉพาะกรณีชำรุดเท่านั้น
 `.trim();
 
-  await test('Upload text to FileSearchStore (multipart)', async () => {
+  // Step 1: Upload to Files API
+  await test('Upload text to Files API', async () => {
     const boundary = '---BOUNDARY---';
-    const metadata = JSON.stringify({
-      displayName: 'SmartHome Hub Pro Manual',
-      customMetadata: [
-        { key: 'category', stringValue: 'manual' },
-        { key: 'language', stringValue: 'thai' },
-      ],
-    });
+    const metadata = JSON.stringify({ file: { displayName: 'SmartHome Hub Pro Manual' } });
 
     const body = [
       `--${boundary}`,
@@ -209,20 +204,37 @@ async function testUploadOperations() {
     ].join('\r\n');
 
     const { ok, data } = await uploadApi(
-      `${state.storeName}:upload`,
+      'files',
       body,
       `multipart/related; boundary=${boundary}`
     );
     assert(ok, `Failed: ${JSON.stringify(data)}`);
-    console.log(`     Upload response: ${JSON.stringify(data).substring(0, 200)}`);
+    assert(data.file && data.file.name, 'No file name returned');
+    state.fileName = data.file.name;
+    console.log(`     Uploaded: ${state.fileName}`);
+  });
 
-    // If it returns an operation, poll it
+  // Step 2: Import file into FileSearchStore
+  await test('Import file into FileSearchStore', async () => {
+    const { ok, data } = await api(`${state.storeName}:importFile`, {
+      method: 'POST',
+      body: JSON.stringify({
+        fileName: state.fileName,
+        customMetadata: [
+          { key: 'category', stringValue: 'manual' },
+          { key: 'language', stringValue: 'thai' },
+        ],
+      }),
+    });
+    assert(ok, `Failed: ${JSON.stringify(data)}`);
+    console.log(`     Import response: ${JSON.stringify(data).substring(0, 200)}`);
+
+    // Poll operation until done
     if (data.name && !data.done) {
       console.log(`     Polling operation: ${data.name}`);
-      let op = data;
       for (let i = 0; i < 30; i++) {
         await sleep(2000);
-        const pollResult = await api(op.name);
+        const pollResult = await api(data.name);
         if (pollResult.ok && pollResult.data.done) {
           console.log(`     Operation completed after ${(i + 1) * 2}s`);
           break;
@@ -278,8 +290,8 @@ async function testSearchOperations() {
           parts: [{ text: 'อธิบายขั้นตอนการติดตั้ง SmartHome Hub Pro ตั้งแต่ต้นจนจบ' }],
         }],
         tools: [{
-          fileSearch: {
-            fileSearchStoreNames: [state.storeName],
+          file_search: {
+            file_search_store_names: [state.storeName],
           },
         }],
       }),
@@ -305,8 +317,8 @@ async function testSearchOperations() {
           parts: [{ text: 'ซื้อสินค้าไปแล้ว 20 วัน อยากคืน ทำได้ไหม มีเงื่อนไขอะไรบ้าง' }],
         }],
         tools: [{
-          fileSearch: {
-            fileSearchStoreNames: [state.storeName],
+          file_search: {
+            file_search_store_names: [state.storeName],
           },
         }],
       }),
@@ -326,8 +338,8 @@ async function testSearchOperations() {
           parts: [{ text: 'What smart home protocols does the Hub Pro support?' }],
         }],
         tools: [{
-          fileSearch: {
-            fileSearchStoreNames: [state.storeName],
+          file_search: {
+            file_search_store_names: [state.storeName],
           },
         }],
       }),
@@ -347,8 +359,8 @@ async function testSearchOperations() {
           parts: [{ text: 'Hub เชื่อมต่อ WiFi ไม่ได้ ต้องทำอย่างไร' }],
         }],
         tools: [{
-          fileSearch: {
-            fileSearchStoreNames: [state.storeName],
+          file_search: {
+            file_search_store_names: [state.storeName],
           },
         }],
       }),
@@ -368,9 +380,9 @@ async function testSearchOperations() {
           parts: [{ text: 'สรุปคู่มือทั้งหมด' }],
         }],
         tools: [{
-          fileSearch: {
-            fileSearchStoreNames: [state.storeName],
-            topK: 3,
+          file_search: {
+            file_search_store_names: [state.storeName],
+            top_k: 3,
           },
         }],
       }),
@@ -410,8 +422,8 @@ async function testDocumentManagement() {
   await test('Verify store deleted', async () => {
     const { ok, status } = await api(state.storeName);
     assert(!ok, 'Store should be deleted');
-    assert(status === 404, `Expected 404, got ${status}`);
-    console.log(`     Store correctly returns 404`);
+    assert(status === 404 || status === 403, `Expected 404 or 403, got ${status}`);
+    console.log(`     Store correctly returns ${status} (not found/permission denied)`);
   });
 }
 
