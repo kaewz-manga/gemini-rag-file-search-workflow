@@ -7,6 +7,6 @@ Audit auth, crypto, API keys, and Gemini API key handling.
 
 ## Checklist
 - [ ] Gemini API keys encrypted at rest
-- [ ] API keys (rag_xxx) hashed before storage
+- [ ] API keys (n2f_xxx) hashed before storage
 - [ ] JWT tokens have reasonable expiry
 - [ ] No credentials in logs

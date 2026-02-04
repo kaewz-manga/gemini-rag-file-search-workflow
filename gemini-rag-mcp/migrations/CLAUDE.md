@@ -12,7 +12,7 @@
 |-------|---------|
 | `users` | User accounts, OAuth |
 | `gemini_connections` | Encrypted Gemini API keys |
-| `api_keys` | SaaS API keys (rag_xxx) |
+| `api_keys` | SaaS API keys (n2f_xxx) |
 | `usage_logs` | Per-request logs |
 | `usage_monthly` | Monthly aggregation |
 | `plans` | Subscription plans |

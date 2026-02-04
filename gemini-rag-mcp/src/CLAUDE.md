@@ -56,7 +56,7 @@ class GeminiClient {
 | Type | Header | Used By |
 |------|--------|---------|
 | **JWT** | `Authorization: Bearer eyJhbG...` | Dashboard |
-| **API Key** | `Authorization: Bearer rag_xxx` | MCP clients |
+| **API Key** | `Authorization: Bearer n2f_xxx` | MCP clients |
 | **OAuth** | Redirect flow | GitHub/Google login |
 
 ---

@@ -4,7 +4,7 @@
 
 ## Auth Headers
 ```
-Authorization: Bearer rag_xxxxxxxxxxxxx
+Authorization: Bearer n2f_xxxxxxxxxxxxx
 ```
 
 ## Response Format

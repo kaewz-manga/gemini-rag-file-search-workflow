@@ -110,7 +110,7 @@ gemini-rag-mcp/
 1. **Gemini API Key** — ต้อง encrypt ก่อนเก็บใน D1
 2. **Pattern ต้องเหมือน n8n-management-mcp**
 3. **Theme Color**: Purple (#8b5cf6) — ใช้ class `rag-*`
-4. **API Key Prefix**: `rag_`
+4. **API Key Prefix**: `n2f_` (same as all MCP projects)
 
 ---
 
